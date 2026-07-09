@@ -1,0 +1,19 @@
+{
+  "name": "弹弹乐",
+  "short_name": "弹弹乐",
+  "description": "纯净无广告的儿童弹弓物理破坏游戏",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f7fbff",
+  "theme_color": "#54b6ff",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

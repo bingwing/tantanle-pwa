@@ -1,0 +1,174 @@
+import Phaser from 'phaser';
+import { loadSave } from '../game/save';
+import { LEVELS } from '../game/levels';
+
+export class BootScene extends Phaser.Scene {
+  constructor() {
+    super('BootScene');
+  }
+
+  create(): void {
+    createCircleTexture(this, 'candy-ball', 72, 0xffcf4d, 0x2e4057, 'classic');
+    createCircleTexture(this, 'candy-ball-heavy', 76, 0xb66dff, 0x2e4057, 'heavy');
+    createCircleTexture(this, 'candy-ball-bouncy', 68, 0x58d9ff, 0x2e4057, 'bouncy');
+    createCircleTexture(this, 'candy-ball-blast', 74, 0xff7a59, 0x2e4057, 'blast');
+    createCircleTexture(this, 'target-jar', 74, 0xff6f91, 0x2e4057);
+    createCircleTexture(this, 'spark', 18, 0xffffff, 0xffffff);
+    createCircleTexture(this, 'candy-firework', 22, 0xff6f91, 0xffffff);
+    createStarTexture(this, 'bonus-star', 76);
+    createBombTexture(this, 'frosting-bomb', 70);
+    createBumperTexture(this, 'bounce-pad', 148, 42);
+    createBlockTexture(this, 'block-wood', 120, 38, 0xd99545, 0x8b5a3c, drawWoodGrain);
+    createBlockTexture(this, 'block-glass', 120, 38, 0x87e8ff, 0x2e9fbd, drawGlassShine);
+    createBlockTexture(this, 'block-stone', 120, 38, 0xa7adb8, 0x68717f, drawStoneSpeckles);
+    createBlockTexture(this, 'block-jelly', 120, 38, 0x7fe3a1, 0x2e8e57, drawJellyBubbles);
+    this.registry.set('save', loadSave(window.localStorage, LEVELS));
+    this.scene.start('MenuScene');
+  }
+}
+
+function createCircleTexture(
+  scene: Phaser.Scene,
+  key: string,
+  size: number,
+  fill: number,
+  stroke: number,
+  pattern: 'classic' | 'heavy' | 'bouncy' | 'blast' = 'classic',
+): void {
+  const graphics = scene.add.graphics();
+  graphics.fillStyle(fill, 1);
+  graphics.fillCircle(size / 2, size / 2, size * 0.42);
+  graphics.lineStyle(7, stroke, 0.9);
+  graphics.strokeCircle(size / 2, size / 2, size * 0.42);
+  graphics.fillStyle(0xffffff, 0.55);
+  graphics.fillCircle(size * 0.36, size * 0.32, size * 0.12);
+  if (pattern === 'heavy') {
+    graphics.lineStyle(5, 0xffffff, 0.42);
+    graphics.lineBetween(size * 0.28, size * 0.58, size * 0.72, size * 0.58);
+    graphics.lineBetween(size * 0.36, size * 0.7, size * 0.64, size * 0.7);
+  }
+  if (pattern === 'bouncy') {
+    graphics.lineStyle(5, 0xffffff, 0.46);
+    graphics.strokeCircle(size * 0.5, size * 0.5, size * 0.24);
+    graphics.strokeCircle(size * 0.5, size * 0.5, size * 0.12);
+  }
+  if (pattern === 'blast') {
+    graphics.lineStyle(5, 0xffffff, 0.5);
+    for (let i = 0; i < 8; i += 1) {
+      const angle = (Math.PI * 2 * i) / 8;
+      graphics.lineBetween(
+        size / 2 + Math.cos(angle) * size * 0.12,
+        size / 2 + Math.sin(angle) * size * 0.12,
+        size / 2 + Math.cos(angle) * size * 0.3,
+        size / 2 + Math.sin(angle) * size * 0.3,
+      );
+    }
+    graphics.fillStyle(0xffcf4d, 0.92);
+    graphics.fillCircle(size * 0.5, size * 0.5, size * 0.13);
+  }
+  graphics.generateTexture(key, size, size);
+  graphics.destroy();
+}
+
+function createBlockTexture(
+  scene: Phaser.Scene,
+  key: string,
+  width: number,
+  height: number,
+  fill: number,
+  stroke: number,
+  decorate: (graphics: Phaser.GameObjects.Graphics, width: number, height: number) => void,
+): void {
+  const graphics = scene.add.graphics();
+  graphics.fillStyle(fill, 1);
+  graphics.fillRoundedRect(0, 0, width, height, 8);
+  decorate(graphics, width, height);
+  graphics.lineStyle(5, stroke, 0.78);
+  graphics.strokeRoundedRect(0, 0, width, height, 8);
+  graphics.lineStyle(3, 0xffffff, 0.28);
+  graphics.lineBetween(14, 10, width - 14, 10);
+  graphics.generateTexture(key, width, height);
+  graphics.destroy();
+}
+
+function createStarTexture(scene: Phaser.Scene, key: string, size: number): void {
+  const graphics = scene.add.graphics();
+  graphics.fillStyle(0xffcf4d, 1);
+  graphics.lineStyle(6, 0x2e4057, 0.9);
+  const points = [];
+  for (let i = 0; i < 10; i += 1) {
+    const radius = i % 2 === 0 ? size * 0.42 : size * 0.19;
+    const angle = -Math.PI / 2 + (Math.PI * 2 * i) / 10;
+    points.push(new Phaser.Math.Vector2(size / 2 + Math.cos(angle) * radius, size / 2 + Math.sin(angle) * radius));
+  }
+  graphics.fillPoints(points, true);
+  graphics.strokePoints(points, true);
+  graphics.fillStyle(0xffffff, 0.55);
+  graphics.fillCircle(size * 0.42, size * 0.33, size * 0.08);
+  graphics.generateTexture(key, size, size);
+  graphics.destroy();
+}
+
+function createBombTexture(scene: Phaser.Scene, key: string, size: number): void {
+  const graphics = scene.add.graphics();
+  graphics.fillStyle(0xff8fb3, 1);
+  graphics.fillCircle(size / 2, size / 2, size * 0.36);
+  graphics.lineStyle(7, 0x2e4057, 0.9);
+  graphics.strokeCircle(size / 2, size / 2, size * 0.36);
+  graphics.fillStyle(0xffffff, 0.65);
+  graphics.fillCircle(size * 0.38, size * 0.35, size * 0.1);
+  graphics.lineStyle(5, 0xffcf4d, 1);
+  graphics.lineBetween(size * 0.62, size * 0.18, size * 0.78, size * 0.06);
+  graphics.fillStyle(0xffcf4d, 1);
+  graphics.fillCircle(size * 0.8, size * 0.05, size * 0.06);
+  graphics.generateTexture(key, size, size);
+  graphics.destroy();
+}
+
+function createBumperTexture(scene: Phaser.Scene, key: string, width: number, height: number): void {
+  const graphics = scene.add.graphics();
+  graphics.fillStyle(0xff6f91, 1);
+  graphics.fillRoundedRect(0, 0, width, height, 18);
+  graphics.fillStyle(0xffcf4d, 1);
+  graphics.fillRoundedRect(10, 7, width - 20, height - 14, 12);
+  graphics.lineStyle(6, 0x2e4057, 0.82);
+  graphics.strokeRoundedRect(0, 0, width, height, 18);
+  graphics.lineStyle(4, 0xffffff, 0.62);
+  for (let i = 0; i < 5; i += 1) {
+    graphics.lineBetween(22 + i * 18, 8, 12 + i * 18, height - 8);
+  }
+  graphics.generateTexture(key, width, height);
+  graphics.destroy();
+}
+
+function drawWoodGrain(graphics: Phaser.GameObjects.Graphics, width: number, height: number): void {
+  graphics.lineStyle(3, 0x8b5a3c, 0.28);
+  graphics.lineBetween(12, height * 0.42, width - 12, height * 0.28);
+  graphics.lineBetween(18, height * 0.7, width - 18, height * 0.58);
+  graphics.fillStyle(0x8b5a3c, 0.22);
+  graphics.fillEllipse(width * 0.68, height * 0.54, 24, 10);
+}
+
+function drawGlassShine(graphics: Phaser.GameObjects.Graphics, width: number, height: number): void {
+  graphics.fillStyle(0xffffff, 0.36);
+  graphics.fillRoundedRect(12, 8, width * 0.34, 8, 4);
+  graphics.fillStyle(0x2e9fbd, 0.18);
+  graphics.fillTriangle(width * 0.55, 4, width * 0.82, 4, width * 0.66, height - 5);
+}
+
+function drawStoneSpeckles(graphics: Phaser.GameObjects.Graphics, width: number, height: number): void {
+  graphics.fillStyle(0x68717f, 0.28);
+  for (let i = 0; i < 8; i += 1) {
+    graphics.fillCircle(14 + i * 13, 12 + (i % 3) * 7, 2 + (i % 2));
+  }
+  graphics.lineStyle(2, 0x68717f, 0.22);
+  graphics.lineBetween(width * 0.18, height * 0.72, width * 0.42, height * 0.52);
+  graphics.lineBetween(width * 0.58, height * 0.35, width * 0.82, height * 0.62);
+}
+
+function drawJellyBubbles(graphics: Phaser.GameObjects.Graphics, width: number, height: number): void {
+  graphics.fillStyle(0xffffff, 0.28);
+  graphics.fillCircle(width * 0.18, height * 0.42, 5);
+  graphics.fillCircle(width * 0.4, height * 0.66, 4);
+  graphics.fillCircle(width * 0.78, height * 0.36, 6);
+}

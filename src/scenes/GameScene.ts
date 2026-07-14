@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { APP_HEIGHT, APP_WIDTH, SLINGSHOT } from '../game/config';
 import { LEVELS } from '../game/levels';
 import {
+  SUGAR_RUSH_COMBO_TARGET,
   calculateStars,
   getShotTypeForIndex,
   isTargetClearedByFall,
@@ -15,6 +16,7 @@ import {
   resolveShotBlast,
   resolveShotPhysics,
   resolveShotScore,
+  resolveSugarRushReward,
   shouldLaunchShot,
   updateLevelProgress,
 } from '../game/rules';
@@ -65,6 +67,14 @@ const SHOT_TINT: Record<ShotType, number> = {
   blast: 0xff7a59,
 };
 
+const SUGAR_RUSH_METER = {
+  x: 610,
+  y: 154,
+  width: 245,
+  height: 28,
+  gap: 7,
+} as const;
+
 export class GameScene extends Phaser.Scene {
   private level!: LevelDefinition;
   private shotsLeft = 0;
@@ -82,6 +92,8 @@ export class GameScene extends Phaser.Scene {
   private hud?: Phaser.GameObjects.Text;
   private ballTypeText?: Phaser.GameObjects.Text;
   private feedback?: Phaser.GameObjects.Text;
+  private sugarRushMeter?: Phaser.GameObjects.Graphics;
+  private sugarRushText?: Phaser.GameObjects.Text;
   private targets = new Map<string, MatterImage>();
   private blocks = new Map<string, BlockState>();
   private collectibles = new Map<string, MatterImage>();
@@ -91,6 +103,8 @@ export class GameScene extends Phaser.Scene {
   private isDragging = false;
   private shotInFlight = false;
   private comboCount = 0;
+  private sugarRushAwarded = false;
+  private levelEnding = false;
 
   constructor() {
     super('GameScene');
@@ -115,6 +129,8 @@ export class GameScene extends Phaser.Scene {
     this.currentTrajectoryPreview = [];
     this.shotInFlight = false;
     this.comboCount = 0;
+    this.sugarRushAwarded = false;
+    this.levelEnding = false;
   }
 
   create(): void {
@@ -187,6 +203,18 @@ export class GameScene extends Phaser.Scene {
         strokeThickness: 4,
       })
       .setDepth(30);
+    this.sugarRushMeter = this.add.graphics().setDepth(30);
+    this.sugarRushText = this.add
+      .text(SUGAR_RUSH_METER.x + SUGAR_RUSH_METER.width / 2, SUGAR_RUSH_METER.y - 21, '', {
+        fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif',
+        fontSize: '20px',
+        color: '#2e4057',
+        fontStyle: '900',
+        stroke: '#ffffff',
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(31);
     addButton(this, 780, 56, 150, 58, '选关', () => this.scene.start('LevelScene'));
     this.refreshHud();
   }
@@ -195,6 +223,38 @@ export class GameScene extends Phaser.Scene {
     this.hud?.setText(`第 ${this.level.id} 关  ${this.level.name}\n分数 ${this.score}  糖果球 ${this.shotsLeft}`);
     this.ballTypeText?.setText(`当前：${SHOT_LABEL[this.currentShotType]}`);
     this.ballTypeText?.setColor(Phaser.Display.Color.IntegerToColor(SHOT_TINT[this.currentShotType]).rgba);
+    this.drawSugarRushMeter();
+  }
+
+  private drawSugarRushMeter(): void {
+    if (!this.sugarRushMeter) {
+      return;
+    }
+
+    const { x, y, width, height, gap } = SUGAR_RUSH_METER;
+    const progress = this.sugarRushAwarded ? SUGAR_RUSH_COMBO_TARGET : Math.min(this.comboCount, SUGAR_RUSH_COMBO_TARGET);
+    const segmentWidth = (width - gap * (SUGAR_RUSH_COMBO_TARGET - 1)) / SUGAR_RUSH_COMBO_TARGET;
+    this.sugarRushText?.setText(this.sugarRushAwarded ? '糖果连锁  奖励已拿' : `糖果连锁  ${progress}/${SUGAR_RUSH_COMBO_TARGET}`);
+    this.sugarRushMeter.clear();
+    this.sugarRushMeter.fillStyle(0xffffff, 0.92);
+    this.sugarRushMeter.fillRoundedRect(x - 6, y - 6, width + 12, height + 12, 10);
+    this.sugarRushMeter.lineStyle(4, 0x2e4057, 0.84);
+    this.sugarRushMeter.strokeRoundedRect(x - 6, y - 6, width + 12, height + 12, 10);
+
+    for (let index = 0; index < SUGAR_RUSH_COMBO_TARGET; index += 1) {
+      const segmentX = x + index * (segmentWidth + gap);
+      const filled = index < progress;
+      this.sugarRushMeter.fillStyle(filled ? 0xffcf4d : 0xdfe9ed, 1);
+      this.sugarRushMeter.fillRoundedRect(segmentX, y, segmentWidth, height, 6);
+      this.sugarRushMeter.lineStyle(3, 0x2e4057, filled ? 0.78 : 0.28);
+      this.sugarRushMeter.strokeRoundedRect(segmentX, y, segmentWidth, height, 6);
+      if (filled) {
+        this.sugarRushMeter.lineStyle(3, 0xffffff, 0.72);
+        for (let offset = 10; offset < segmentWidth; offset += 14) {
+          this.sugarRushMeter.lineBetween(segmentX + offset - 7, y + height - 5, segmentX + offset + 4, y + 5);
+        }
+      }
+    }
   }
 
   private createWorld(): void {
@@ -685,7 +745,15 @@ export class GameScene extends Phaser.Scene {
     this.celebrateImpact(target.x, target.y, 'target-clear');
     target.destroy();
     this.refreshHud();
-    this.finishIfNeeded();
+    if (this.targets.size === 0) {
+      // Keep the scene alive briefly so the final hit and reward celebration are visible before results.
+      this.levelEnding = true;
+      this.time.delayedCall(900, () => {
+        if (this.scene.isActive('GameScene')) {
+          this.finish(true);
+        }
+      });
+    }
   }
 
   private celebrateImpact(x: number, y: number, kind: CelebrationKind): void {
@@ -783,6 +851,57 @@ export class GameScene extends Phaser.Scene {
       ease: 'Back.out',
       onComplete: () => comboText.destroy(),
     });
+    this.triggerSugarRush();
+  }
+
+  private triggerSugarRush(): void {
+    const reward = resolveSugarRushReward(this.comboCount, this.sugarRushAwarded);
+    if (!reward.triggered) {
+      return;
+    }
+
+    this.sugarRushAwarded = true;
+    this.shotsLeft += reward.extraShots;
+    this.score += reward.score;
+    this.feedback?.setText('糖果狂热！奖励糖果球');
+    const banner = this.add
+      .text(APP_WIDTH / 2, 255, `糖果狂热！\n+${reward.extraShots} 糖果球`, {
+        fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif',
+        fontSize: '50px',
+        color: '#2e4057',
+        align: 'center',
+        fontStyle: '900',
+        stroke: '#ffffff',
+        strokeThickness: 9,
+      })
+      .setOrigin(0.5)
+      .setDepth(60)
+      .setScale(0.55);
+    const fireworks = this.add.particles(APP_WIDTH / 2, 245, 'candy-firework', {
+      speed: { min: 180, max: 470 },
+      angle: { min: 195, max: 345 },
+      lifespan: 1050,
+      quantity: 88,
+      scale: { start: 1.35, end: 0 },
+      gravityY: 220,
+      tint: [0xffcf4d, 0xff6f91, 0x58d9ff, 0xffffff],
+      emitting: false,
+    });
+    fireworks.explode(88);
+    this.showScorePop(APP_WIDTH / 2, 350, reward.score, 0xffcf4d);
+    this.cameras.main.flash(280, 255, 225, 90, false);
+    this.cameras.main.shake(260, 0.016);
+    this.tweens.add({
+      targets: banner,
+      scale: 1,
+      duration: 260,
+      ease: 'Back.out',
+      yoyo: true,
+      hold: 540,
+      onComplete: () => banner.destroy(),
+    });
+    this.time.delayedCall(1150, () => fireworks.destroy());
+    this.refreshHud();
   }
 
   private showScorePop(x: number, y: number, points: number, color: number): void {
@@ -840,6 +959,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private finishIfNeeded(): void {
+    if (this.levelEnding) {
+      return;
+    }
     if (this.targets.size === 0) {
       this.finish(true);
       return;

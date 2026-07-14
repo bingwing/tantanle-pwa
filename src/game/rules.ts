@@ -30,7 +30,15 @@ type CelebrationBonus = {
   shake: number;
 };
 
+type SugarRushReward = {
+  triggered: boolean;
+  extraShots: number;
+  score: number;
+};
+
 const SHOT_SEQUENCE: ShotType[] = ['classic', 'heavy', 'bouncy', 'blast'];
+
+export const SUGAR_RUSH_COMBO_TARGET = 4;
 
 const BLOCK_DURABILITY: Record<BlockMaterial, number> = {
   glass: 1,
@@ -118,6 +126,13 @@ export function resolveBumperHit(kind: BumperKind): BumperHit {
 
 export function resolveCelebrationBonus(kind: CelebrationKind): CelebrationBonus {
   return kind === 'target-clear' ? { score: 320, particles: 72, shake: 0.014 } : { score: 180, particles: 56, shake: 0.012 };
+}
+
+export function resolveSugarRushReward(comboCount: number, alreadyAwarded: boolean): SugarRushReward {
+  if (alreadyAwarded || comboCount < SUGAR_RUSH_COMBO_TARGET) {
+    return { triggered: false, extraShots: 0, score: 0 };
+  }
+  return { triggered: true, extraShots: 1, score: 600 };
 }
 
 export function resolveBlockDurability(material: BlockMaterial): number {

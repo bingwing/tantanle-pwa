@@ -12,6 +12,15 @@ type ShotPhysics = {
   powerMultiplier: number;
 };
 
+type ShotAbility = {
+  kind: 'dash' | 'slam' | 'hop' | 'detonate';
+  speedMultiplier: number;
+  verticalImpulse: number;
+  blastRadius: number;
+  blastForce: number;
+  blastDamage: number;
+};
+
 type BombBlast = {
   radius: number;
   force: number;
@@ -81,6 +90,41 @@ const SHOT_PHYSICS: Record<ShotType, ShotPhysics> = {
     density: 0.0024,
     restitution: 0.5,
     powerMultiplier: 1.04,
+  },
+};
+
+const SHOT_ABILITIES: Record<ShotType, ShotAbility> = {
+  classic: {
+    kind: 'dash',
+    speedMultiplier: 1.45,
+    verticalImpulse: -1.5,
+    blastRadius: 0,
+    blastForce: 0,
+    blastDamage: 0,
+  },
+  heavy: {
+    kind: 'slam',
+    speedMultiplier: 0.88,
+    verticalImpulse: 15,
+    blastRadius: 0,
+    blastForce: 0,
+    blastDamage: 0,
+  },
+  bouncy: {
+    kind: 'hop',
+    speedMultiplier: 1.12,
+    verticalImpulse: -10,
+    blastRadius: 0,
+    blastForce: 0,
+    blastDamage: 0,
+  },
+  blast: {
+    kind: 'detonate',
+    speedMultiplier: 1,
+    verticalImpulse: 0,
+    blastRadius: 150,
+    blastForce: 0.024,
+    blastDamage: 2,
   },
 };
 
@@ -157,6 +201,10 @@ export function getShotTypeForIndex(index: number): ShotType {
 
 export function resolveShotPhysics(type: ShotType): ShotPhysics {
   return SHOT_PHYSICS[type];
+}
+
+export function resolveShotAbility(type: ShotType): ShotAbility {
+  return SHOT_ABILITIES[type];
 }
 
 export function createDefaultSave(levels: LevelDefinition[]): GameSave {

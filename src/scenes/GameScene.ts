@@ -13,6 +13,7 @@ import {
   resolveCelebrationBonus,
   resolveCollectibleScore,
   resolveComboBonus,
+  resolveShotAbility,
   resolveShotBlast,
   resolveShotPhysics,
   resolveShotScore,
@@ -67,6 +68,20 @@ const SHOT_TINT: Record<ShotType, number> = {
   blast: 0xff7a59,
 };
 
+const SHOT_ABILITY_ICON: Record<ShotType, string> = {
+  classic: '➤',
+  heavy: '↓',
+  bouncy: '↻',
+  blast: '✦',
+};
+
+const SHOT_ABILITY_FEEDBACK: Record<ShotType, string> = {
+  classic: '糖球冲刺',
+  heavy: '重糖坠击',
+  bouncy: '弹跳转向',
+  blast: '爆爆引爆',
+};
+
 const SUGAR_RUSH_METER = {
   x: 610,
   y: 154,
@@ -94,6 +109,10 @@ export class GameScene extends Phaser.Scene {
   private feedback?: Phaser.GameObjects.Text;
   private sugarRushMeter?: Phaser.GameObjects.Graphics;
   private sugarRushText?: Phaser.GameObjects.Text;
+  private abilityButton?: Phaser.GameObjects.Container;
+  private abilityButtonBackground?: Phaser.GameObjects.Graphics;
+  private abilityButtonIcon?: Phaser.GameObjects.Text;
+  private abilityButtonPulse?: Phaser.GameObjects.Arc;
   private targets = new Map<string, MatterImage>();
   private blocks = new Map<string, BlockState>();
   private collectibles = new Map<string, MatterImage>();
@@ -103,6 +122,7 @@ export class GameScene extends Phaser.Scene {
   private isDragging = false;
   private shotInFlight = false;
   private comboCount = 0;
+  private abilityUsed = false;
   private sugarRushAwarded = false;
   private levelEnding = false;
 
@@ -129,6 +149,7 @@ export class GameScene extends Phaser.Scene {
     this.currentTrajectoryPreview = [];
     this.shotInFlight = false;
     this.comboCount = 0;
+    this.abilityUsed = false;
     this.sugarRushAwarded = false;
     this.levelEnding = false;
   }
@@ -215,6 +236,7 @@ export class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(31);
+    this.createAbilityButton();
     addButton(this, 780, 56, 150, 58, '选关', () => this.scene.start('LevelScene'));
     this.refreshHud();
   }
@@ -255,6 +277,70 @@ export class GameScene extends Phaser.Scene {
         }
       }
     }
+  }
+
+  private createAbilityButton(): void {
+    const pulse = this.add.circle(0, 0, 68, 0xffffff, 0.14).setStrokeStyle(5, 0xffffff, 0.78);
+    const background = this.add.graphics();
+    const icon = this.add
+      .text(0, 0, '', {
+        fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif',
+        fontSize: '58px',
+        color: '#ffffff',
+        fontStyle: '900',
+        stroke: '#2e4057',
+        strokeThickness: 6,
+      })
+      .setOrigin(0.5);
+    const hit = this.add.zone(0, 0, 142, 142).setInteractive({ useHandCursor: true });
+    const button = this.add.container(815, 1060, [pulse, background, icon, hit]).setDepth(85).setVisible(false);
+    hit.on('pointerdown', () => button.setScale(0.92));
+    hit.on('pointerup', () => {
+      button.setScale(1);
+      this.activateShotAbility();
+    });
+    hit.on('pointerout', () => button.setScale(1));
+    this.abilityButton = button;
+    this.abilityButtonBackground = background;
+    this.abilityButtonIcon = icon;
+    this.abilityButtonPulse = pulse;
+  }
+
+  private showAbilityButton(): void {
+    if (!this.abilityButton || !this.abilityButtonBackground || !this.abilityButtonIcon || !this.abilityButtonPulse) {
+      return;
+    }
+
+    const tint = SHOT_TINT[this.currentShotType];
+    this.abilityButtonBackground.clear();
+    this.abilityButtonBackground.fillStyle(0xffffff, 0.96);
+    this.abilityButtonBackground.fillCircle(0, 0, 61);
+    this.abilityButtonBackground.lineStyle(6, 0x2e4057, 0.9);
+    this.abilityButtonBackground.strokeCircle(0, 0, 61);
+    this.abilityButtonBackground.fillStyle(tint, 1);
+    this.abilityButtonBackground.fillCircle(0, 0, 49);
+    this.abilityButtonBackground.lineStyle(4, 0xffffff, 0.68);
+    this.abilityButtonBackground.strokeCircle(0, 0, 49);
+    this.abilityButtonIcon.setText(SHOT_ABILITY_ICON[this.currentShotType]);
+    this.abilityButtonPulse.setFillStyle(tint, 0.16).setStrokeStyle(5, tint, 0.76).setScale(0.88).setAlpha(0.92);
+    this.abilityButton.setScale(1).setVisible(true);
+    this.tweens.killTweensOf(this.abilityButtonPulse);
+    this.tweens.add({
+      targets: this.abilityButtonPulse,
+      scale: 1.16,
+      alpha: 0.18,
+      duration: 620,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.inOut',
+    });
+  }
+
+  private hideAbilityButton(): void {
+    if (this.abilityButtonPulse) {
+      this.tweens.killTweensOf(this.abilityButtonPulse);
+    }
+    this.abilityButton?.setVisible(false).setScale(1);
   }
 
   private createWorld(): void {
@@ -415,6 +501,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.currentShotType = getShotTypeForIndex(this.shotIndex);
+    this.abilityUsed = false;
+    this.hideAbilityButton();
     this.drawLastTrajectory();
     const physics = resolveShotPhysics(this.currentShotType);
     const ball = this.matter.add.image(SLINGSHOT.x, SLINGSHOT.y, SHOT_TEXTURE[this.currentShotType], undefined, {
@@ -559,7 +647,36 @@ export class GameScene extends Phaser.Scene {
     this.clearShotHalo();
     this.feedback?.setText(`${SHOT_LABEL[this.currentShotType]}出击`);
     this.refreshHud();
+    this.showAbilityButton();
     this.time.delayedCall(5200, () => this.endShot());
+  }
+
+  private activateShotAbility(): void {
+    if (!this.shotInFlight || this.abilityUsed || !this.activeBall) {
+      return;
+    }
+
+    const ability = resolveShotAbility(this.currentShotType);
+    const velocity = this.activeBall.body.velocity;
+    this.abilityUsed = true;
+    this.hideAbilityButton();
+    this.activeBall.setVelocity(
+      velocity.x * ability.speedMultiplier,
+      velocity.y * ability.speedMultiplier + ability.verticalImpulse,
+    );
+    this.activeBall.setAngularVelocity(ability.kind === 'slam' ? 0.48 : ability.kind === 'hop' ? -0.38 : 0.26);
+    this.burst(this.activeBall.x, this.activeBall.y, SHOT_TINT[this.currentShotType], ability.kind === 'detonate' ? 48 : 28);
+    if (ability.blastRadius > 0) {
+      this.applyBlastForce(
+        this.activeBall.x,
+        this.activeBall.y,
+        ability.blastRadius,
+        ability.blastForce,
+        ability.blastDamage,
+      );
+      this.celebrateImpact(this.activeBall.x, this.activeBall.y, 'big-blast');
+    }
+    this.feedback?.setText(SHOT_ABILITY_FEEDBACK[this.currentShotType]);
   }
 
   private clearAim(): void {
@@ -748,6 +865,7 @@ export class GameScene extends Phaser.Scene {
     if (this.targets.size === 0) {
       // Keep the scene alive briefly so the final hit and reward celebration are visible before results.
       this.levelEnding = true;
+      this.hideAbilityButton();
       this.time.delayedCall(900, () => {
         if (this.scene.isActive('GameScene')) {
           this.finish(true);
@@ -949,6 +1067,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.activeBall?.destroy();
     this.clearShotHalo();
+    this.hideAbilityButton();
     this.activeBall = undefined;
     this.shotInFlight = false;
     this.comboCount = 0;
@@ -972,6 +1091,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private finish(won: boolean): void {
+    this.hideAbilityButton();
     const stars = won ? Math.max(1, calculateStars(this.level, this.score)) : 0;
     if (won) {
       const save = updateLevelProgress(this.registry.get('save') as GameSave, LEVELS, this.level.id, this.score, stars);

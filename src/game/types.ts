@@ -3,6 +3,7 @@ export type ShotType = 'classic' | 'heavy' | 'bouncy' | 'blast';
 export type CollectibleKind = 'star';
 export type HazardKind = 'frosting-bomb';
 export type BumperKind = 'bounce-pad';
+export type PortalKind = 'rainbow-portal';
 export type CelebrationKind = 'target-clear' | 'big-blast';
 
 export type BlockDefinition = {
@@ -43,6 +44,21 @@ export type BumperDefinition = {
   kind: BumperKind;
 };
 
+export type PortalDefinition = {
+  id: string;
+  kind: PortalKind;
+  entry: {
+    x: number;
+    y: number;
+    angle?: number;
+  };
+  exit: {
+    x: number;
+    y: number;
+    angle?: number;
+  };
+};
+
 export type LevelDefinition = {
   id: number;
   name: string;
@@ -53,6 +69,7 @@ export type LevelDefinition = {
   collectibles?: CollectibleDefinition[];
   hazards?: HazardDefinition[];
   bumpers?: BumperDefinition[];
+  portals?: PortalDefinition[];
 };
 
 export type LevelProgress = {

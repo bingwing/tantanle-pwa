@@ -1,4 +1,4 @@
-import type { BlockMaterial, BumperKind, CelebrationKind, CollectibleKind, GameSave, HazardKind, LevelDefinition, ShotType } from './types';
+import type { BlockMaterial, BumperKind, CelebrationKind, CollectibleKind, GameSave, HazardKind, LevelDefinition, PortalKind, ShotType } from './types';
 
 type ShotScoreInput = {
   targetsCleared: number;
@@ -31,6 +31,13 @@ type BumperHit = {
   impulse: number;
   score: number;
   cooldownMs: number;
+};
+
+type PortalTransfer = {
+  speedMultiplier: number;
+  score: number;
+  cooldownMs: number;
+  exitOffset: number;
 };
 
 type CelebrationBonus = {
@@ -166,6 +173,12 @@ export function resolveShotBlast(type: ShotType): BombBlast {
 
 export function resolveBumperHit(kind: BumperKind): BumperHit {
   return kind === 'bounce-pad' ? { impulse: 12.8, score: 220, cooldownMs: 260 } : { impulse: 0, score: 0, cooldownMs: 0 };
+}
+
+export function resolvePortalTransfer(kind: PortalKind): PortalTransfer {
+  return kind === 'rainbow-portal'
+    ? { speedMultiplier: 1.12, score: 400, cooldownMs: 650, exitOffset: 64 }
+    : { speedMultiplier: 1, score: 0, cooldownMs: 0, exitOffset: 0 };
 }
 
 export function resolveCelebrationBonus(kind: CelebrationKind): CelebrationBonus {

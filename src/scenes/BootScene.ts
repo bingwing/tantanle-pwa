@@ -18,6 +18,7 @@ export class BootScene extends Phaser.Scene {
     createStarTexture(this, 'bonus-star', 76);
     createBombTexture(this, 'frosting-bomb', 70);
     createBumperTexture(this, 'bounce-pad', 148, 42);
+    createPortalTexture(this, 'rainbow-portal', 96);
     createBlockTexture(this, 'block-wood', 120, 38, 0xd99545, 0x8b5a3c, drawWoodGrain);
     createBlockTexture(this, 'block-glass', 120, 38, 0x87e8ff, 0x2e9fbd, drawGlassShine);
     createBlockTexture(this, 'block-stone', 120, 38, 0xa7adb8, 0x68717f, drawStoneSpeckles);
@@ -138,6 +139,33 @@ function createBumperTexture(scene: Phaser.Scene, key: string, width: number, he
     graphics.lineBetween(22 + i * 18, 8, 12 + i * 18, height - 8);
   }
   graphics.generateTexture(key, width, height);
+  graphics.destroy();
+}
+
+function createPortalTexture(scene: Phaser.Scene, key: string, size: number): void {
+  const graphics = scene.add.graphics();
+  const center = size / 2;
+  graphics.fillStyle(0x2e4057, 1);
+  graphics.fillCircle(center, center, size * 0.47);
+  graphics.fillStyle(0x58d9ff, 1);
+  graphics.fillCircle(center, center, size * 0.4);
+  graphics.fillStyle(0xffffff, 1);
+  graphics.fillCircle(center, center, size * 0.31);
+  graphics.fillStyle(0xff6f91, 1);
+  graphics.fillCircle(center, center, size * 0.23);
+  graphics.fillStyle(0xffcf4d, 1);
+  graphics.fillCircle(center, center, size * 0.12);
+  graphics.lineStyle(5, 0xffffff, 0.78);
+  for (let index = 0; index < 4; index += 1) {
+    const angle = (Math.PI * 2 * index) / 4;
+    graphics.lineBetween(
+      center + Math.cos(angle) * size * 0.29,
+      center + Math.sin(angle) * size * 0.29,
+      center + Math.cos(angle) * size * 0.39,
+      center + Math.sin(angle) * size * 0.39,
+    );
+  }
+  graphics.generateTexture(key, size, size);
   graphics.destroy();
 }
 

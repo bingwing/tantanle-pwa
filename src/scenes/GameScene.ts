@@ -13,6 +13,7 @@ import {
   resolveCelebrationBonus,
   resolveCollectibleScore,
   resolveComboBonus,
+  resolvePortalTransfer,
   resolveShotAbility,
   resolveShotBlast,
   resolveShotPhysics,
@@ -22,7 +23,7 @@ import {
   updateLevelProgress,
 } from '../game/rules';
 import { writeSave } from '../game/save';
-import type { BlockDefinition, BumperDefinition, CelebrationKind, CollectibleDefinition, GameSave, HazardDefinition, LevelDefinition, ShotType } from '../game/types';
+import type { BlockDefinition, BumperDefinition, CelebrationKind, CollectibleDefinition, GameSave, HazardDefinition, LevelDefinition, PortalDefinition, ShotType } from '../game/types';
 import { addButton } from './ui';
 
 type MatterImage = Phaser.Physics.Matter.Image & { gameId?: string; body: MatterJS.BodyType };
@@ -31,6 +32,10 @@ type BlockState = {
   material: BlockDefinition['material'];
   durability: number;
   hits: number;
+};
+type PortalEndpointState = {
+  destination: MatterImage;
+  exitAngle: number;
 };
 
 const MATERIAL_TINT: Record<BlockDefinition['material'], number> = {
@@ -119,6 +124,8 @@ export class GameScene extends Phaser.Scene {
   private hazards = new Map<string, MatterImage>();
   private bumpers = new Map<string, MatterImage>();
   private bumperCooldowns = new Map<string, number>();
+  private portals = new Map<string, PortalEndpointState>();
+  private portalCooldownUntil = 0;
   private isDragging = false;
   private shotInFlight = false;
   private comboCount = 0;
@@ -142,6 +149,8 @@ export class GameScene extends Phaser.Scene {
     this.hazards.clear();
     this.bumpers.clear();
     this.bumperCooldowns.clear();
+    this.portals.clear();
+    this.portalCooldownUntil = 0;
     this.activeBall = undefined;
     this.activeBallHalo = undefined;
     this.currentShotType = 'classic';
@@ -407,6 +416,10 @@ export class GameScene extends Phaser.Scene {
     for (const bumper of this.level.bumpers ?? []) {
       this.createBumper(bumper);
     }
+
+    for (const portal of this.level.portals ?? []) {
+      this.createPortal(portal);
+    }
   }
 
   private createCollectible(collectible: CollectibleDefinition): void {
@@ -471,6 +484,54 @@ export class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(15);
+  }
+
+  private createPortal(portal: PortalDefinition): void {
+    const entryLabel = `portal:${portal.id}:entry`;
+    const exitLabel = `portal:${portal.id}:exit`;
+    const entry = this.matter.add.image(portal.entry.x, portal.entry.y, 'rainbow-portal', undefined, {
+      isStatic: true,
+      isSensor: true,
+      label: entryLabel,
+    }) as MatterImage;
+    entry.setCircle(43);
+    entry.setStatic(true);
+    entry.body.label = `portal:${portal.id}:entry`;
+    entry.body.isSensor = true;
+    entry.setAngle(portal.entry.angle ?? 0).setDepth(14);
+
+    const exit = this.matter.add.image(portal.exit.x, portal.exit.y, 'rainbow-portal', undefined, {
+      isStatic: true,
+      isSensor: true,
+      label: exitLabel,
+    }) as MatterImage;
+    exit.setCircle(43);
+    exit.setStatic(true);
+    exit.body.label = `portal:${portal.id}:exit`;
+    exit.body.isSensor = true;
+    exit.setAngle(portal.exit.angle ?? 0).setDepth(14);
+
+    this.portals.set(`${portal.id}:entry`, {
+      destination: exit,
+      exitAngle: portal.exit.angle ?? 0,
+    });
+    this.portals.set(`${portal.id}:exit`, {
+      destination: entry,
+      exitAngle: portal.entry.angle ?? 180,
+    });
+
+    for (const endpoint of [entry, exit]) {
+      const halo = this.add.circle(endpoint.x, endpoint.y, 55, 0xffffff, 0.08).setStrokeStyle(5, 0x58d9ff, 0.72).setDepth(13);
+      this.tweens.add({
+        targets: halo,
+        scale: { from: 0.88, to: 1.18 },
+        alpha: { from: 0.78, to: 0.12 },
+        duration: 760,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.inOut',
+      });
+    }
   }
 
   private createSlingshot(): void {
@@ -717,6 +778,7 @@ export class GameScene extends Phaser.Scene {
         const collectibleLabel = labels.find((label) => label.startsWith('collectible:'));
         const hazardLabel = labels.find((label) => label.startsWith('hazard:'));
         const bumperLabel = labels.find((label) => label.startsWith('bumper:'));
+        const portalLabel = labels.find((label) => label.startsWith('portal:'));
         if (targetLabel) {
           this.clearTarget(targetLabel.replace('target:', ''));
         }
@@ -733,8 +795,40 @@ export class GameScene extends Phaser.Scene {
         if (bumperLabel) {
           this.triggerBumper(bumperLabel.replace('bumper:', ''));
         }
+        if (portalLabel) {
+          this.triggerPortal(portalLabel.replace('portal:', ''));
+        }
       }
     }
+  }
+
+  private triggerPortal(id: string): void {
+    const endpoint = this.portals.get(id);
+    if (!endpoint || !this.activeBall || this.time.now < this.portalCooldownUntil) {
+      return;
+    }
+
+    const transfer = resolvePortalTransfer('rainbow-portal');
+    const velocity = this.activeBall.body.velocity;
+    const speed = Math.max(10, Math.hypot(velocity.x, velocity.y) * transfer.speedMultiplier);
+    const exitAngle = Phaser.Math.DegToRad(endpoint.exitAngle);
+    const sourceX = this.activeBall.x;
+    const sourceY = this.activeBall.y;
+    this.portalCooldownUntil = this.time.now + transfer.cooldownMs;
+    this.burst(sourceX, sourceY, 0x58d9ff, 30);
+    this.activeBall.setPosition(
+      endpoint.destination.x + Math.cos(exitAngle) * transfer.exitOffset,
+      endpoint.destination.y + Math.sin(exitAngle) * transfer.exitOffset,
+    );
+    this.activeBall.setVelocity(Math.cos(exitAngle) * speed, Math.sin(exitAngle) * speed);
+    this.activeBall.setAngularVelocity(0.42);
+    this.score += transfer.score;
+    this.comboCount += 1;
+    this.feedback?.setText('彩虹穿梭');
+    this.burst(endpoint.destination.x, endpoint.destination.y, 0xff6f91, 38);
+    this.showScorePop(endpoint.destination.x, endpoint.destination.y - 58, transfer.score, 0x58d9ff);
+    this.showComboText(endpoint.destination.x, endpoint.destination.y - 104);
+    this.refreshHud();
   }
 
   private triggerBumper(id: string): void {

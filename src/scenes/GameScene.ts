@@ -19,17 +19,25 @@ import {
   resolveShotPhysics,
   resolveShotScore,
   resolveSugarRushReward,
+  resolveTargetDamage,
   shouldLaunchShot,
   updateLevelProgress,
 } from '../game/rules';
 import { writeSave } from '../game/save';
-import type { BlockDefinition, BumperDefinition, CelebrationKind, CollectibleDefinition, GameSave, HazardDefinition, LevelDefinition, PortalDefinition, ShotType } from '../game/types';
+import type { BlockDefinition, BumperDefinition, CelebrationKind, CollectibleDefinition, GameSave, HazardDefinition, LevelDefinition, PortalDefinition, ShotType, TargetKind } from '../game/types';
 import { addButton } from './ui';
 
 type MatterImage = Phaser.Physics.Matter.Image & { gameId?: string; body: MatterJS.BodyType };
 type BlockState = {
   sprite: MatterImage;
   material: BlockDefinition['material'];
+  durability: number;
+  hits: number;
+};
+type TargetState = {
+  sprite: MatterImage;
+  label: Phaser.GameObjects.Text;
+  kind: TargetKind;
   durability: number;
   hits: number;
 };
@@ -118,7 +126,7 @@ export class GameScene extends Phaser.Scene {
   private abilityButtonBackground?: Phaser.GameObjects.Graphics;
   private abilityButtonIcon?: Phaser.GameObjects.Text;
   private abilityButtonPulse?: Phaser.GameObjects.Arc;
-  private targets = new Map<string, MatterImage>();
+  private targets = new Map<string, TargetState>();
   private blocks = new Map<string, BlockState>();
   private collectibles = new Map<string, MatterImage>();
   private hazards = new Map<string, MatterImage>();
@@ -182,7 +190,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     for (const [id, target] of this.targets) {
-      if (isTargetClearedByFall(target.y)) {
+      target.label.setPosition(target.sprite.x, target.sprite.y + (target.kind === 'treasure-chest' ? 68 : 55));
+      if (isTargetClearedByFall(target.sprite.y)) {
         this.clearTarget(id);
       }
     }
@@ -381,20 +390,26 @@ export class GameScene extends Phaser.Scene {
     }
 
     for (const target of this.level.targets) {
-      const jar = this.matter.add.image(target.x, target.y, 'target-jar', undefined, {
-        density: 0.0012,
-        friction: 0.55,
+      const kind = target.kind ?? 'jar';
+      const isTreasureChest = kind === 'treasure-chest';
+      const sprite = this.matter.add.image(target.x, target.y, isTreasureChest ? 'treasure-chest' : 'target-jar', undefined, {
+        density: isTreasureChest ? 0.0022 : 0.0012,
+        friction: isTreasureChest ? 0.72 : 0.55,
         frictionAir: 0.01,
-        restitution: 0.24,
+        restitution: isTreasureChest ? 0.16 : 0.24,
         label: `target:${target.id}`,
       }) as MatterImage;
-      jar.gameId = target.id;
-      jar.setCircle(33);
-      jar.body.label = `target:${target.id}`;
-      jar.setScale(0.95);
-      this.targets.set(target.id, jar);
-      this.add
-        .text(target.x, target.y + 55, '糖果罐', {
+      sprite.gameId = target.id;
+      if (isTreasureChest) {
+        sprite.setRectangle(102, 72, { chamfer: { radius: 10 } });
+      } else {
+        sprite.setCircle(33);
+        sprite.setScale(0.95);
+      }
+      sprite.body.label = `target:${target.id}`;
+      sprite.setDepth(12);
+      const label = this.add
+        .text(target.x, target.y + (isTreasureChest ? 68 : 55), isTreasureChest ? '糖果宝箱' : '糖果罐', {
           fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif',
           fontSize: '18px',
           color: '#2e4057',
@@ -402,7 +417,15 @@ export class GameScene extends Phaser.Scene {
           stroke: '#ffffff',
           strokeThickness: 3,
         })
-        .setOrigin(0.5);
+        .setOrigin(0.5)
+        .setDepth(13);
+      this.targets.set(target.id, {
+        sprite,
+        label,
+        kind,
+        durability: Math.max(1, target.durability ?? (isTreasureChest ? 3 : 1)),
+        hits: 0,
+      });
     }
 
     for (const collectible of this.level.collectibles ?? []) {
@@ -780,7 +803,7 @@ export class GameScene extends Phaser.Scene {
         const bumperLabel = labels.find((label) => label.startsWith('bumper:'));
         const portalLabel = labels.find((label) => label.startsWith('portal:'));
         if (targetLabel) {
-          this.clearTarget(targetLabel.replace('target:', ''));
+          this.damageTarget(targetLabel.replace('target:', ''));
         }
         if (blockLabel) {
           this.damageBlock(blockLabel.replace('block:', ''), 1);
@@ -921,22 +944,65 @@ export class GameScene extends Phaser.Scene {
   }
 
   private applyBlastForce(x: number, y: number, radius: number, force: number, damage = 2): void {
-    const bodies = [...Array.from(this.blocks.values(), (block) => block.sprite), ...this.targets.values()];
+    const bodies = [
+      ...Array.from(this.blocks.entries(), ([id, block]) => ({ id, kind: 'block' as const, sprite: block.sprite })),
+      ...Array.from(this.targets.entries(), ([id, target]) => ({ id, kind: 'target' as const, sprite: target.sprite })),
+    ];
     for (const body of bodies) {
-      const distance = Phaser.Math.Distance.Between(x, y, body.x, body.y);
+      const distance = Phaser.Math.Distance.Between(x, y, body.sprite.x, body.sprite.y);
       if (distance > radius || distance <= 1) {
         continue;
       }
       const strength = (1 - distance / radius) * force;
-      body.applyForce(
+      body.sprite.applyForce(
         new Phaser.Math.Vector2(
-          ((body.x - x) / distance) * strength,
-          ((body.y - y) / distance) * strength - strength * 0.35,
+          ((body.sprite.x - x) / distance) * strength,
+          ((body.sprite.y - y) / distance) * strength - strength * 0.35,
         ),
       );
-      this.damageBlock(body.gameId ?? '', damage);
+      if (body.kind === 'block') {
+        this.damageBlock(body.id, damage);
+      } else {
+        this.damageTarget(body.id, damage);
+      }
     }
     this.cameras.main.shake(180, 0.012);
+  }
+
+  private damageTarget(id: string, amount = 1): void {
+    const target = this.targets.get(id);
+    if (!target) {
+      return;
+    }
+
+    target.hits += amount;
+    const damage = resolveTargetDamage(target.kind, target.hits, target.durability);
+    if (damage.score > 0) {
+      this.score += damage.score;
+      this.showScorePop(target.sprite.x, target.sprite.y - 48, damage.score, 0xffcf4d);
+    }
+    if (damage.cleared) {
+      this.clearTarget(id);
+      return;
+    }
+
+    const sprite = target.sprite;
+    this.comboCount += 1;
+    sprite.setTexture('treasure-chest-cracked');
+    this.feedback?.setText(target.hits === 1 ? '宝箱裂开啦，再来一下' : '宝藏要出来啦');
+    this.burst(sprite.x, sprite.y, 0x58d9ff, target.hits === 1 ? 26 : 38);
+    this.showComboText(sprite.x, sprite.y - 100);
+    this.tweens.add({
+      targets: sprite,
+      scaleX: sprite.scaleX * 1.13,
+      scaleY: sprite.scaleY * 1.13,
+      angle: sprite.angle + (target.hits % 2 === 0 ? -9 : 9),
+      duration: 110,
+      yoyo: true,
+      ease: 'Back.out',
+    });
+    this.cameras.main.shake(150, 0.01);
+    this.refreshHud();
   }
 
   private clearTarget(id: string): void {
@@ -949,12 +1015,17 @@ export class GameScene extends Phaser.Scene {
     const points = resolveShotScore({ targetsCleared: 1, blocksBroken: 0, shotsLeft: this.shotsLeft });
     this.score += points;
     this.comboCount += 1;
-    this.feedback?.setText('糖果罐打飞啦');
-    this.burst(target.x, target.y, 0xff6f91, 32);
-    this.showScorePop(target.x, target.y - 32, points, 0xff6f91);
-    this.showComboText(target.x, target.y - 84);
-    this.celebrateImpact(target.x, target.y, 'target-clear');
-    target.destroy();
+    const sprite = target.sprite;
+    const isTreasureChest = target.kind === 'treasure-chest';
+    const color = isTreasureChest ? 0xffcf4d : 0xff6f91;
+    this.feedback?.setText(isTreasureChest ? '宝箱打开，糖果宝藏喷出来啦' : '糖果罐打飞啦');
+    this.burst(sprite.x, sprite.y, color, isTreasureChest ? 58 : 32);
+    this.showScorePop(sprite.x, sprite.y - 32, points, color);
+    this.showComboText(sprite.x, sprite.y - 84);
+    this.celebrateImpact(sprite.x, sprite.y, 'target-clear');
+    this.tweens.killTweensOf(sprite);
+    target.label.destroy();
+    sprite.destroy();
     this.refreshHud();
     if (this.targets.size === 0) {
       // Keep the scene alive briefly so the final hit and reward celebration are visible before results.

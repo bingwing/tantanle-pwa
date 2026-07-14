@@ -14,7 +14,7 @@ describe('celebration feedback', () => {
     expect(source).toContain('celebrateImpact');
     expect(source).toContain('candy-firework');
     expect(source).toContain('resolveCelebrationBonus(kind)');
-    expect(source).toContain("this.celebrateImpact(target.x, target.y, 'target-clear')");
+    expect(source).toContain("this.celebrateImpact(sprite.x, sprite.y, 'target-clear')");
     expect(source).toContain("this.celebrateImpact(bomb.x, bomb.y, 'big-blast')");
     expect(source).toContain("this.celebrateImpact(x, y, 'big-blast')");
   });

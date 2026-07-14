@@ -1,4 +1,4 @@
-import type { BlockMaterial, BumperKind, CelebrationKind, CollectibleKind, GameSave, HazardKind, LevelDefinition, PortalKind, ShotType } from './types';
+import type { BlockMaterial, BumperKind, CelebrationKind, CollectibleKind, GameSave, HazardKind, LevelDefinition, PortalKind, ShotType, TargetKind } from './types';
 
 type ShotScoreInput = {
   targetsCleared: number;
@@ -50,6 +50,12 @@ type SugarRushReward = {
   triggered: boolean;
   extraShots: number;
   score: number;
+};
+
+type TargetDamage = {
+  cleared: boolean;
+  score: number;
+  stage: 'cracked' | 'open';
 };
 
 const SHOT_SEQUENCE: ShotType[] = ['classic', 'heavy', 'bouncy', 'blast'];
@@ -198,6 +204,20 @@ export function resolveBlockDurability(material: BlockMaterial): number {
 
 export function resolveBlockDamageScore(material: BlockMaterial, destroyed: boolean): number {
   return destroyed ? BLOCK_BREAK_SCORE[material] : BLOCK_CRACK_SCORE[material];
+}
+
+export function resolveTargetDamage(kind: TargetKind, hits: number, durability: number): TargetDamage {
+  if (kind === 'jar') {
+    return { cleared: true, score: 0, stage: 'open' };
+  }
+  if (hits >= durability) {
+    return { cleared: true, score: 900, stage: 'open' };
+  }
+  return {
+    cleared: false,
+    score: hits === 1 ? 350 : 500,
+    stage: 'cracked',
+  };
 }
 
 export function shouldLaunchShot(pullDistance: number): boolean {

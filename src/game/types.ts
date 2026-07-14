@@ -4,6 +4,7 @@ export type CollectibleKind = 'star';
 export type HazardKind = 'frosting-bomb';
 export type BumperKind = 'bounce-pad';
 export type PortalKind = 'rainbow-portal';
+export type TargetKind = 'jar' | 'treasure-chest';
 export type CelebrationKind = 'target-clear' | 'big-blast';
 
 export type BlockDefinition = {
@@ -20,6 +21,8 @@ export type TargetDefinition = {
   id: string;
   x: number;
   y: number;
+  kind?: TargetKind;
+  durability?: number;
 };
 
 export type CollectibleDefinition = {

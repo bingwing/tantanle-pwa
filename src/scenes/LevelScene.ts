@@ -4,8 +4,11 @@ import { LEVELS } from '../game/levels';
 import type { GameSave } from '../game/types';
 import { addButton } from './ui';
 
-const LEVEL_PAGE_SIZE = 9;
-const CHAPTER_NAMES = ['甜甜岛', '彩虹岛'];
+const LEVEL_CHAPTERS = [
+  { name: '甜甜岛', firstLevel: 1, lastLevel: 10 },
+  { name: '彩虹岛', firstLevel: 11, lastLevel: 15 },
+  { name: '宝藏岛', firstLevel: 16, lastLevel: 20 },
+] as const;
 
 export class LevelScene extends Phaser.Scene {
   private currentPage = 0;
@@ -45,8 +48,10 @@ export class LevelScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.save = this.registry.get('save') as GameSave;
-    const totalPages = Math.ceil(LEVELS.length / LEVEL_PAGE_SIZE);
-    this.currentPage = Phaser.Math.Clamp(Math.floor((this.save.lastUnlockedLevel - 1) / LEVEL_PAGE_SIZE), 0, totalPages - 1);
+    const unlockedChapter = LEVEL_CHAPTERS.findIndex(
+      (chapter) => this.save.lastUnlockedLevel >= chapter.firstLevel && this.save.lastUnlockedLevel <= chapter.lastLevel,
+    );
+    this.currentPage = unlockedChapter >= 0 ? unlockedChapter : LEVEL_CHAPTERS.length - 1;
     this.previousPageButton = addButton(this, 300, 970, 92, 72, '‹', () => this.changePage(-1));
     this.nextPageButton = addButton(this, 600, 970, 92, 72, '›', () => this.changePage(1));
     this.pageText = this.add
@@ -62,8 +67,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private changePage(delta: number): void {
-    const totalPages = Math.ceil(LEVELS.length / LEVEL_PAGE_SIZE);
-    const nextPage = Phaser.Math.Clamp(this.currentPage + delta, 0, totalPages - 1);
+    const nextPage = Phaser.Math.Clamp(this.currentPage + delta, 0, LEVEL_CHAPTERS.length - 1);
     if (nextPage === this.currentPage) {
       return;
     }
@@ -75,27 +79,26 @@ export class LevelScene extends Phaser.Scene {
     this.pageContainer?.removeAll(true);
     this.pageContainer?.destroy();
     this.pageContainer = this.add.container(0, 0);
-    const totalPages = Math.ceil(LEVELS.length / LEVEL_PAGE_SIZE);
-    const start = this.currentPage * LEVEL_PAGE_SIZE;
-    const pageLevels = LEVELS.slice(start, start + LEVEL_PAGE_SIZE);
-    this.chapterTitle?.setText(CHAPTER_NAMES[this.currentPage] ?? `第 ${this.currentPage + 1} 章`);
-    this.pageText?.setText(`${this.currentPage + 1} / ${totalPages}`);
+    const chapter = LEVEL_CHAPTERS[this.currentPage];
+    const pageLevels = LEVELS.filter((level) => level.id >= chapter.firstLevel && level.id <= chapter.lastLevel);
+    this.chapterTitle?.setText(chapter.name);
+    this.pageText?.setText(`${this.currentPage + 1} / ${LEVEL_CHAPTERS.length}`);
     this.previousPageButton?.setAlpha(this.currentPage === 0 ? 0.32 : 1);
-    this.nextPageButton?.setAlpha(this.currentPage === totalPages - 1 ? 0.32 : 1);
+    this.nextPageButton?.setAlpha(this.currentPage === LEVEL_CHAPTERS.length - 1 ? 0.32 : 1);
 
     for (const [index, level] of pageLevels.entries()) {
       const x = 160 + (index % 3) * 290;
-      const y = 260 + Math.floor(index / 3) * 220;
+      const y = 235 + Math.floor(index / 3) * 180;
       const progress = this.save.levels[level.id];
       const unlocked = progress?.unlocked ?? level.id === 1;
-      const button = addButton(this, x, y, 190, 108, unlocked ? `${level.id}` : '锁', () => {
+      const button = addButton(this, x, y, 190, 100, unlocked ? `${level.id}` : '锁', () => {
         if (unlocked) {
           this.scene.start('GameScene', { levelId: level.id });
         }
       });
       button.setAlpha(unlocked ? 1 : 0.45);
       const label = this.add
-        .text(x, y + 78, unlocked ? `${'★'.repeat(progress?.stars ?? 0)}${'☆'.repeat(3 - (progress?.stars ?? 0))}` : '未解锁', {
+        .text(x, y + 70, unlocked ? `${'★'.repeat(progress?.stars ?? 0)}${'☆'.repeat(3 - (progress?.stars ?? 0))}` : '未解锁', {
           fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif',
           fontSize: '24px',
           color: '#44627d',

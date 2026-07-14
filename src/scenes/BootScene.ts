@@ -13,6 +13,8 @@ export class BootScene extends Phaser.Scene {
     createCircleTexture(this, 'candy-ball-bouncy', 68, 0x58d9ff, 0x2e4057, 'bouncy');
     createCircleTexture(this, 'candy-ball-blast', 74, 0xff7a59, 0x2e4057, 'blast');
     createCircleTexture(this, 'target-jar', 74, 0xff6f91, 0x2e4057);
+    createTreasureChestTexture(this, 'treasure-chest', false);
+    createTreasureChestTexture(this, 'treasure-chest-cracked', true);
     createCircleTexture(this, 'spark', 18, 0xffffff, 0xffffff);
     createCircleTexture(this, 'candy-firework', 22, 0xff6f91, 0xffffff);
     createStarTexture(this, 'bonus-star', 76);
@@ -68,6 +70,43 @@ function createCircleTexture(
     graphics.fillCircle(size * 0.5, size * 0.5, size * 0.13);
   }
   graphics.generateTexture(key, size, size);
+  graphics.destroy();
+}
+
+function createTreasureChestTexture(scene: Phaser.Scene, key: string, cracked: boolean): void {
+  const width = 118;
+  const height = 92;
+  const graphics = scene.add.graphics();
+  graphics.fillStyle(0x2e4057, 1);
+  graphics.fillRoundedRect(1, 8, width - 2, height - 9, 14);
+  graphics.fillStyle(0xffcf4d, 1);
+  graphics.fillRoundedRect(8, 15, width - 16, 67, 8);
+  graphics.fillStyle(0xff8a3d, 1);
+  graphics.fillRoundedRect(8, 49, width - 16, 33, 6);
+  graphics.lineStyle(5, 0x2e4057, 0.92);
+  graphics.lineBetween(7, 48, width - 7, 48);
+  graphics.lineBetween(27, 16, 27, 81);
+  graphics.lineBetween(width - 27, 16, width - 27, 81);
+  graphics.fillStyle(0xffffff, 0.52);
+  graphics.fillRoundedRect(14, 20, 48, 8, 4);
+  graphics.fillStyle(0x2e4057, 1);
+  graphics.fillRoundedRect(width / 2 - 13, 37, 26, 34, 7);
+  graphics.fillStyle(0x58d9ff, 1);
+  graphics.fillCircle(width / 2, 53, 8);
+  graphics.fillStyle(0xffffff, 0.72);
+  graphics.fillCircle(width / 2 - 3, 50, 2.5);
+
+  if (cracked) {
+    graphics.lineStyle(6, 0x2e4057, 1);
+    graphics.lineBetween(82, 16, 72, 32);
+    graphics.lineBetween(72, 32, 84, 42);
+    graphics.lineBetween(84, 42, 73, 57);
+    graphics.lineBetween(73, 57, 83, 70);
+    graphics.lineStyle(3, 0xffffff, 0.72);
+    graphics.lineBetween(86, 18, 77, 31);
+  }
+
+  graphics.generateTexture(key, width, height);
   graphics.destroy();
 }
 

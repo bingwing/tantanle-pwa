@@ -30,9 +30,10 @@ describe('rainbow portal elements', () => {
   it('paginates the level map into a rainbow island chapter', () => {
     const levelSource = readFileSync(new URL('../src/scenes/LevelScene.ts', import.meta.url), 'utf8');
 
-    expect(levelSource).toContain('LEVEL_PAGE_SIZE');
+    expect(levelSource).toContain('LEVEL_CHAPTERS');
     expect(levelSource).toContain('renderPage');
     expect(levelSource).toContain('changePage');
     expect(levelSource).toContain('彩虹岛');
+    expect(levelSource).toContain('宝藏岛');
   });
 });

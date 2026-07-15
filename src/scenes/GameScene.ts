@@ -26,6 +26,7 @@ import {
 } from '../game/rules';
 import { writeSave } from '../game/save';
 import type { BlockDefinition, BumperDefinition, CelebrationKind, CollectibleDefinition, GameSave, HazardDefinition, LevelDefinition, PortalDefinition, ShotType, TargetKind } from '../game/types';
+import { WORLD_SETTLE, isBodyMotionSettled, shouldFreezeWorld } from '../game/worldSettle';
 import { addButton } from './ui';
 
 type MatterImage = Phaser.Physics.Matter.Image & { gameId?: string; body: MatterJS.BodyType };
@@ -109,8 +110,6 @@ const SUGAR_RUSH_METER = {
   height: 28,
   gap: 7,
 } as const;
-
-const WORLD_SETTLE_MS = 650;
 
 export class GameScene extends Phaser.Scene {
   private level!: LevelDefinition;
@@ -465,8 +464,25 @@ export class GameScene extends Phaser.Scene {
   }
 
   private settleWorldAndSpawnBall(): void {
-    this.time.delayedCall(WORLD_SETTLE_MS, () => {
+    let sampledMs = 0;
+    let stableChecks = 0;
+    const sprites = [
+      ...Array.from(this.blocks.values(), (block) => block.sprite),
+      ...Array.from(this.targets.values(), (target) => target.sprite),
+      ...this.hazards.values(),
+    ];
+
+    const checkWorld = () => {
       if (!this.scene.isActive('GameScene') || this.levelEnding) {
+        return;
+      }
+
+      // Consecutive samples avoid freezing a body at the top of a bounce.
+      const allSettled = sprites.every((sprite) => isBodyMotionSettled(sprite.body.speed, sprite.body.angularSpeed));
+      stableChecks = allSettled ? stableChecks + 1 : 0;
+      sampledMs += WORLD_SETTLE.checkMs;
+      if (!shouldFreezeWorld(sampledMs, stableChecks)) {
+        this.time.delayedCall(WORLD_SETTLE.checkMs, checkWorld);
         return;
       }
 
@@ -482,7 +498,9 @@ export class GameScene extends Phaser.Scene {
 
       this.worldReady = true;
       this.spawnBall();
-    });
+    };
+
+    this.time.delayedCall(WORLD_SETTLE.checkMs, checkWorld);
   }
 
   private createCollectible(collectible: CollectibleDefinition): void {
@@ -634,7 +652,7 @@ export class GameScene extends Phaser.Scene {
     this.drawLastTrajectory();
     const physics = resolveShotPhysics(this.currentShotType);
     const ballBody = {
-      isStatic: true,
+      isStatic: false,
       restitution: physics.restitution,
       friction: 0.4,
       frictionAir: 0.01,
@@ -643,6 +661,7 @@ export class GameScene extends Phaser.Scene {
     };
     const ball = this.matter.add.image(SLINGSHOT.x, SLINGSHOT.y, SHOT_TEXTURE[this.currentShotType], undefined, ballBody) as MatterImage;
     ball.setCircle(34, ballBody);
+    ball.setStatic(true);
     ball.body.label = 'ball';
     ball.setInteractive({ draggable: true, useHandCursor: true });
     ball.setDepth(20);

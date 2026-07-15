@@ -4,7 +4,9 @@
 
 **Goal:** Let existing level structures settle naturally before play, then freeze them so the first interaction is stable and only player-triggered impacts can cause clearance.
 
-**Architecture:** `GameScene` owns a short preparation phase because Matter bodies and input lifecycle already live there. Blocks, targets, and hazards start dynamic for 650ms, then the scene freezes their settled bodies and spawns the first ball. Each target records whether player-triggered impact released it; only released jars use fall clearance, while treasure chests remain durability-only targets.
+**Architecture:** `GameScene` owns a short preparation phase because Matter bodies and input lifecycle already live there. Blocks, targets, and hazards start dynamic for 650-800ms of completed physics sampling, then freeze after consecutive low-speed checks or the sample-budget fallback. Wall-clock time may extend on low-frame-rate devices so delayed first frames cannot freeze moving bodies. Each target records whether player-triggered impact released it; only released jars use fall clearance, while treasure chests remain durability-only targets.
+
+> 实施补充：最终版本将下文最初规划的固定 650ms 回调加固为 `worldSettle.ts` 中可测试的稳定检测规则，并增加真实 Matter 动态体 -> 静态体 -> 动态体质量恢复测试。下方步骤保留为原始实施记录。
 
 **Tech Stack:** TypeScript, Phaser 3 Matter physics, Vite, Vitest.
 

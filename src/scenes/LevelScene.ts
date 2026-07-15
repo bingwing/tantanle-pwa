@@ -8,6 +8,7 @@ const LEVEL_CHAPTERS = [
   { name: '甜甜岛', firstLevel: 1, lastLevel: 10 },
   { name: '彩虹岛', firstLevel: 11, lastLevel: 15 },
   { name: '宝藏岛', firstLevel: 16, lastLevel: 20 },
+  { name: '汽水岛', firstLevel: 21, lastLevel: 25 },
 ] as const;
 
 export class LevelScene extends Phaser.Scene {

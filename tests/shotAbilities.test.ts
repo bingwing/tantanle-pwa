@@ -36,6 +36,15 @@ describe('shot abilities', () => {
       blastForce: 0.024,
       blastDamage: 2,
     });
+    expect(resolveShotAbility('split')).toEqual({
+      kind: 'split',
+      speedMultiplier: 1,
+      verticalImpulse: 0,
+      blastRadius: 0,
+      blastForce: 0,
+      blastDamage: 0,
+      splitSpreadDegrees: 20,
+    });
   });
 
   it('connects the ability rule to a single-use in-flight button', () => {

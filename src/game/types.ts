@@ -1,5 +1,5 @@
 export type BlockMaterial = 'wood' | 'glass' | 'stone' | 'jelly';
-export type ShotType = 'classic' | 'heavy' | 'bouncy' | 'blast';
+export type ShotType = 'classic' | 'heavy' | 'bouncy' | 'blast' | 'split';
 export type CollectibleKind = 'star';
 export type HazardKind = 'frosting-bomb';
 export type BumperKind = 'bounce-pad';

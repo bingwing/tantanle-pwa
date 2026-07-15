@@ -313,4 +313,91 @@ export const LEVELS: LevelDefinition[] = [
     ],
     blocks: [...tower(640, 790, [wood]), ...tower(770, 790, [glass, jelly]), ...tower(850, 785, [jelly])],
   },
+  {
+    id: 21,
+    name: '三球初见',
+    shots: 9,
+    starScores: [3600, 5600, 7600],
+    targets: [
+      { id: 'jar-left', x: 650, y: 685 },
+      { id: 'jar-right', x: 835, y: 685 },
+    ],
+    collectibles: [{ id: 'star-1', x: 735, y: 555, kind: 'star' }],
+    blocks: [...tower(650, 790, [glass]), ...tower(835, 790, [glass])],
+  },
+  {
+    id: 22,
+    name: '汽水双塔',
+    shots: 10,
+    starScores: [4700, 7100, 9500],
+    targets: [
+      { id: 'jar-left', x: 625, y: 685 },
+      { id: 'jar-right', x: 850, y: 685 },
+      { id: 'jar-top', x: 745, y: 660 },
+    ],
+    hazards: [{ id: 'bomb-1', x: 745, y: 735, kind: 'frosting-bomb' }],
+    blocks: [...tower(625, 790, [wood]), ...tower(850, 790, [jelly]), { id: 'bridge-1', x: 745, y: 706, width: 190, height: 26, material: glass }],
+  },
+  {
+    id: 23,
+    name: '泡泡弹跳',
+    shots: 10,
+    starScores: [5000, 7600, 10200],
+    targets: [
+      { id: 'jar-left', x: 665, y: 685 },
+      { id: 'jar-right', x: 815, y: 613 },
+    ],
+    collectibles: [{ id: 'star-1', x: 595, y: 600, kind: 'star' }],
+    bumpers: [
+      { id: 'bumper-left', x: 555, y: 825, angle: -18, kind: 'bounce-pad' },
+      { id: 'bumper-right', x: 855, y: 825, angle: 18, kind: 'bounce-pad' },
+    ],
+    blocks: [...tower(665, 790, [jelly]), ...tower(815, 790, [glass, wood])],
+  },
+  {
+    id: 24,
+    name: '彩虹分流',
+    shots: 11,
+    starScores: [5600, 8400, 11300],
+    targets: [
+      { id: 'jar-left', x: 670, y: 613 },
+      { id: 'jar-right', x: 830, y: 608 },
+    ],
+    hazards: [{ id: 'bomb-1', x: 750, y: 705, kind: 'frosting-bomb' }],
+    portals: [
+      {
+        id: 'rainbow-1',
+        kind: 'rainbow-portal',
+        entry: { x: 480, y: 820, angle: -18 },
+        exit: { x: 625, y: 630, angle: -14 },
+      },
+    ],
+    blocks: [...tower(670, 790, [glass, jelly]), ...tower(830, 785, [wood, glass])],
+  },
+  {
+    id: 25,
+    name: '汽水嘉年华',
+    shots: 12,
+    starScores: [6800, 10200, 13700],
+    targets: [
+      { id: 'chest-1', x: 650, y: 682, kind: 'treasure-chest', durability: 3 },
+      { id: 'jar-1', x: 770, y: 613 },
+      { id: 'jar-2', x: 850, y: 680 },
+    ],
+    collectibles: [{ id: 'star-1', x: 575, y: 565, kind: 'star' }],
+    hazards: [
+      { id: 'bomb-1', x: 710, y: 730, kind: 'frosting-bomb' },
+      { id: 'bomb-2', x: 810, y: 735, kind: 'frosting-bomb' },
+    ],
+    bumpers: [{ id: 'bumper-1', x: 560, y: 830, angle: -18, kind: 'bounce-pad' }],
+    portals: [
+      {
+        id: 'rainbow-1',
+        kind: 'rainbow-portal',
+        entry: { x: 470, y: 820, angle: -16 },
+        exit: { x: 620, y: 520, angle: 12 },
+      },
+    ],
+    blocks: [...tower(650, 790, [wood]), ...tower(770, 790, [glass, jelly]), ...tower(850, 785, [jelly])],
+  },
 ];

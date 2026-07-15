@@ -18,6 +18,7 @@ import {
   resolveShotBlast,
   resolveShotPhysics,
   resolveShotScore,
+  resolveSplitShotVelocities,
   resolveSugarRushReward,
   resolveTargetDamage,
   shouldLaunchShot,
@@ -65,6 +66,7 @@ const SHOT_TEXTURE: Record<ShotType, string> = {
   heavy: 'candy-ball-heavy',
   bouncy: 'candy-ball-bouncy',
   blast: 'candy-ball-blast',
+  split: 'candy-ball-split',
 };
 
 const SHOT_LABEL: Record<ShotType, string> = {
@@ -72,6 +74,7 @@ const SHOT_LABEL: Record<ShotType, string> = {
   heavy: '重重糖球',
   bouncy: '弹弹糖球',
   blast: '爆爆糖球',
+  split: '彩虹分裂球',
 };
 
 const SHOT_TINT: Record<ShotType, number> = {
@@ -79,6 +82,7 @@ const SHOT_TINT: Record<ShotType, number> = {
   heavy: 0xb66dff,
   bouncy: 0x58d9ff,
   blast: 0xff7a59,
+  split: 0x54d6bf,
 };
 
 const SHOT_ABILITY_ICON: Record<ShotType, string> = {
@@ -86,6 +90,7 @@ const SHOT_ABILITY_ICON: Record<ShotType, string> = {
   heavy: '↓',
   bouncy: '↻',
   blast: '✦',
+  split: '3',
 };
 
 const SHOT_ABILITY_FEEDBACK: Record<ShotType, string> = {
@@ -93,6 +98,7 @@ const SHOT_ABILITY_FEEDBACK: Record<ShotType, string> = {
   heavy: '重糖坠击',
   bouncy: '弹跳转向',
   blast: '爆爆引爆',
+  split: '彩虹三连弹',
 };
 
 const SUGAR_RUSH_METER = {
@@ -110,6 +116,7 @@ export class GameScene extends Phaser.Scene {
   private targetsCleared = 0;
   private blocksBroken = 0;
   private activeBall?: MatterImage;
+  private activeBalls = new Set<MatterImage>();
   private activeBallHalo?: Phaser.GameObjects.Arc;
   private currentShotType: ShotType = 'classic';
   private shotIndex = 0;
@@ -131,9 +138,9 @@ export class GameScene extends Phaser.Scene {
   private collectibles = new Map<string, MatterImage>();
   private hazards = new Map<string, MatterImage>();
   private bumpers = new Map<string, MatterImage>();
-  private bumperCooldowns = new Map<string, number>();
+  private bumperCooldowns = new WeakMap<MatterImage, Map<string, number>>();
   private portals = new Map<string, PortalEndpointState>();
-  private portalCooldownUntil = 0;
+  private portalCooldownUntil = new WeakMap<MatterImage, number>();
   private isDragging = false;
   private shotInFlight = false;
   private comboCount = 0;
@@ -156,9 +163,10 @@ export class GameScene extends Phaser.Scene {
     this.collectibles.clear();
     this.hazards.clear();
     this.bumpers.clear();
-    this.bumperCooldowns.clear();
+    this.activeBalls.clear();
+    this.bumperCooldowns = new WeakMap();
     this.portals.clear();
-    this.portalCooldownUntil = 0;
+    this.portalCooldownUntil = new WeakMap();
     this.activeBall = undefined;
     this.activeBallHalo = undefined;
     this.currentShotType = 'classic';
@@ -602,6 +610,7 @@ export class GameScene extends Phaser.Scene {
     ball.setInteractive({ draggable: true, useHandCursor: true });
     ball.setDepth(20);
     this.activeBall = ball;
+    this.activeBalls.add(ball);
     this.feedback?.setText(`${SHOT_LABEL[this.currentShotType]}准备好`);
     this.refreshHud();
 
@@ -744,6 +753,10 @@ export class GameScene extends Phaser.Scene {
     const velocity = this.activeBall.body.velocity;
     this.abilityUsed = true;
     this.hideAbilityButton();
+    if (ability.kind === 'split') {
+      this.splitActiveBall(ability.splitSpreadDegrees ?? 20);
+      return;
+    }
     this.activeBall.setVelocity(
       velocity.x * ability.speedMultiplier,
       velocity.y * ability.speedMultiplier + ability.verticalImpulse,
@@ -761,6 +774,42 @@ export class GameScene extends Phaser.Scene {
       this.celebrateImpact(this.activeBall.x, this.activeBall.y, 'big-blast');
     }
     this.feedback?.setText(SHOT_ABILITY_FEEDBACK[this.currentShotType]);
+  }
+
+  private splitActiveBall(spreadDegrees: number): void {
+    if (!this.activeBall) {
+      return;
+    }
+
+    const ball = this.activeBall;
+    const physics = resolveShotPhysics('split');
+    const velocities = resolveSplitShotVelocities(ball.body.velocity, spreadDegrees);
+    const collisionGroup = -this.shotIndex - 1;
+    ball.setCollisionGroup(collisionGroup);
+    ball.setVelocity(velocities[1].x, velocities[1].y);
+    ball.setAngularVelocity(0.26);
+
+    for (const [index, velocity] of [velocities[0], velocities[2]].entries()) {
+      const clone = this.matter.add.image(ball.x, ball.y + (index === 0 ? -16 : 16), 'candy-ball-split', undefined, {
+        restitution: physics.restitution,
+        friction: 0.4,
+        frictionAir: 0.01,
+        density: physics.density,
+        label: 'ball',
+      }) as MatterImage;
+      clone.setCircle(34);
+      clone.body.label = 'ball';
+      clone.setCollisionGroup(collisionGroup);
+      clone.setVelocity(velocity.x, velocity.y);
+      clone.setAngularVelocity(velocity.y < 0 ? -0.28 : 0.28);
+      clone.setDepth(20);
+      this.activeBalls.add(clone);
+    }
+
+    this.burst(ball.x, ball.y, SHOT_TINT.split, 64);
+    this.cameras.main.flash(150, 104, 236, 209, false);
+    this.cameras.main.shake(170, 0.013);
+    this.feedback?.setText(SHOT_ABILITY_FEEDBACK.split);
   }
 
   private clearAim(): void {
@@ -796,6 +845,11 @@ export class GameScene extends Phaser.Scene {
     for (const pair of event.pairs) {
       const labels = [pair.bodyA.label, pair.bodyB.label];
       if (labels.includes('ball')) {
+        const ballBody = pair.bodyA.label === 'ball' ? pair.bodyA : pair.bodyB.label === 'ball' ? pair.bodyB : undefined;
+        const ball = ballBody?.gameObject as MatterImage | undefined;
+        if (!ball || !this.activeBalls.has(ball)) {
+          continue;
+        }
         const targetLabel = labels.find((label) => label.startsWith('target:'));
         const blockLabel = labels.find((label) => label.startsWith('block:'));
         const collectibleLabel = labels.find((label) => label.startsWith('collectible:'));
@@ -807,7 +861,7 @@ export class GameScene extends Phaser.Scene {
         }
         if (blockLabel) {
           this.damageBlock(blockLabel.replace('block:', ''), 1);
-          this.triggerShotBlast(pair.collision.supports?.[0]?.x ?? this.activeBall?.x ?? 0, pair.collision.supports?.[0]?.y ?? this.activeBall?.y ?? 0);
+          this.triggerShotBlast(pair.collision.supports?.[0]?.x ?? ball.x, pair.collision.supports?.[0]?.y ?? ball.y);
         }
         if (collectibleLabel) {
           this.collectStar(collectibleLabel.replace('collectible:', ''));
@@ -816,35 +870,36 @@ export class GameScene extends Phaser.Scene {
           this.triggerFrostingBomb(hazardLabel.replace('hazard:', ''));
         }
         if (bumperLabel) {
-          this.triggerBumper(bumperLabel.replace('bumper:', ''));
+          this.triggerBumper(bumperLabel.replace('bumper:', ''), ball);
         }
         if (portalLabel) {
-          this.triggerPortal(portalLabel.replace('portal:', ''));
+          this.triggerPortal(portalLabel.replace('portal:', ''), ball);
         }
       }
     }
   }
 
-  private triggerPortal(id: string): void {
+  private triggerPortal(id: string, ball: MatterImage): void {
     const endpoint = this.portals.get(id);
-    if (!endpoint || !this.activeBall || this.time.now < this.portalCooldownUntil) {
+    const cooldownUntil = this.portalCooldownUntil.get(ball) ?? 0;
+    if (!endpoint || this.time.now < cooldownUntil) {
       return;
     }
 
     const transfer = resolvePortalTransfer('rainbow-portal');
-    const velocity = this.activeBall.body.velocity;
+    const velocity = ball.body.velocity;
     const speed = Math.max(10, Math.hypot(velocity.x, velocity.y) * transfer.speedMultiplier);
     const exitAngle = Phaser.Math.DegToRad(endpoint.exitAngle);
-    const sourceX = this.activeBall.x;
-    const sourceY = this.activeBall.y;
-    this.portalCooldownUntil = this.time.now + transfer.cooldownMs;
+    const sourceX = ball.x;
+    const sourceY = ball.y;
+    this.portalCooldownUntil.set(ball, this.time.now + transfer.cooldownMs);
     this.burst(sourceX, sourceY, 0x58d9ff, 30);
-    this.activeBall.setPosition(
+    ball.setPosition(
       endpoint.destination.x + Math.cos(exitAngle) * transfer.exitOffset,
       endpoint.destination.y + Math.sin(exitAngle) * transfer.exitOffset,
     );
-    this.activeBall.setVelocity(Math.cos(exitAngle) * speed, Math.sin(exitAngle) * speed);
-    this.activeBall.setAngularVelocity(0.42);
+    ball.setVelocity(Math.cos(exitAngle) * speed, Math.sin(exitAngle) * speed);
+    ball.setAngularVelocity(0.42);
     this.score += transfer.score;
     this.comboCount += 1;
     this.feedback?.setText('彩虹穿梭');
@@ -854,22 +909,24 @@ export class GameScene extends Phaser.Scene {
     this.refreshHud();
   }
 
-  private triggerBumper(id: string): void {
+  private triggerBumper(id: string, ball: MatterImage): void {
     const bumper = this.bumpers.get(id);
-    if (!bumper || !this.activeBall) {
+    if (!bumper) {
       return;
     }
 
     const now = this.time.now;
-    if ((this.bumperCooldowns.get(id) ?? 0) > now) {
+    const cooldowns = this.bumperCooldowns.get(ball) ?? new Map<string, number>();
+    this.bumperCooldowns.set(ball, cooldowns);
+    if ((cooldowns.get(id) ?? 0) > now) {
       return;
     }
 
     const hit = resolveBumperHit('bounce-pad');
-    this.bumperCooldowns.set(id, now + hit.cooldownMs);
+    cooldowns.set(id, now + hit.cooldownMs);
     const normalAngle = Phaser.Math.DegToRad(bumper.angle - 90);
-    this.activeBall.setVelocity(Math.cos(normalAngle) * hit.impulse, Math.sin(normalAngle) * hit.impulse);
-    this.activeBall.setAngularVelocity(0.32);
+    ball.setVelocity(Math.cos(normalAngle) * hit.impulse, Math.sin(normalAngle) * hit.impulse);
+    ball.setAngularVelocity(0.32);
     this.score += hit.score;
     this.comboCount += 1;
     this.feedback?.setText('弹力糖垫反弹');
@@ -1230,9 +1287,13 @@ export class GameScene extends Phaser.Scene {
     if (!this.shotInFlight) {
       return;
     }
-    this.activeBall?.destroy();
     this.clearShotHalo();
     this.hideAbilityButton();
+    for (const ball of this.activeBalls) {
+      this.tweens.killTweensOf(ball);
+      ball.destroy();
+    }
+    this.activeBalls.clear();
     this.activeBall = undefined;
     this.shotInFlight = false;
     this.comboCount = 0;

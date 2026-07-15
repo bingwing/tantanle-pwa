@@ -35,5 +35,6 @@ describe('rainbow portal elements', () => {
     expect(levelSource).toContain('changePage');
     expect(levelSource).toContain('彩虹岛');
     expect(levelSource).toContain('宝藏岛');
+    expect(levelSource).toContain('汽水岛');
   });
 });

@@ -13,12 +13,13 @@ type ShotPhysics = {
 };
 
 type ShotAbility = {
-  kind: 'dash' | 'slam' | 'hop' | 'detonate';
+  kind: 'dash' | 'slam' | 'hop' | 'detonate' | 'split';
   speedMultiplier: number;
   verticalImpulse: number;
   blastRadius: number;
   blastForce: number;
   blastDamage: number;
+  splitSpreadDegrees?: number;
 };
 
 type BombBlast = {
@@ -58,7 +59,7 @@ type TargetDamage = {
   stage: 'cracked' | 'open';
 };
 
-const SHOT_SEQUENCE: ShotType[] = ['classic', 'heavy', 'bouncy', 'blast'];
+const SHOT_SEQUENCE: ShotType[] = ['classic', 'heavy', 'bouncy', 'blast', 'split'];
 
 export const SUGAR_RUSH_COMBO_TARGET = 4;
 
@@ -104,6 +105,11 @@ const SHOT_PHYSICS: Record<ShotType, ShotPhysics> = {
     restitution: 0.5,
     powerMultiplier: 1.04,
   },
+  split: {
+    density: 0.0019,
+    restitution: 0.72,
+    powerMultiplier: 1,
+  },
 };
 
 const SHOT_ABILITIES: Record<ShotType, ShotAbility> = {
@@ -138,6 +144,15 @@ const SHOT_ABILITIES: Record<ShotType, ShotAbility> = {
     blastRadius: 150,
     blastForce: 0.024,
     blastDamage: 2,
+  },
+  split: {
+    kind: 'split',
+    speedMultiplier: 1,
+    verticalImpulse: 0,
+    blastRadius: 0,
+    blastForce: 0,
+    blastDamage: 0,
+    splitSpreadDegrees: 20,
   },
 };
 
@@ -238,6 +253,19 @@ export function resolveShotPhysics(type: ShotType): ShotPhysics {
 
 export function resolveShotAbility(type: ShotType): ShotAbility {
   return SHOT_ABILITIES[type];
+}
+
+export function resolveSplitShotVelocities(
+  velocity: { x: number; y: number },
+  spreadDegrees: number,
+): Array<{ x: number; y: number }> {
+  return [-spreadDegrees, 0, spreadDegrees].map((degrees) => {
+    const angle = (degrees * Math.PI) / 180;
+    return {
+      x: velocity.x * Math.cos(angle) - velocity.y * Math.sin(angle),
+      y: velocity.x * Math.sin(angle) + velocity.y * Math.cos(angle),
+    };
+  });
 }
 
 export function createDefaultSave(levels: LevelDefinition[]): GameSave {

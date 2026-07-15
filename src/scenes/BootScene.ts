@@ -12,6 +12,7 @@ export class BootScene extends Phaser.Scene {
     createCircleTexture(this, 'candy-ball-heavy', 76, 0xb66dff, 0x2e4057, 'heavy');
     createCircleTexture(this, 'candy-ball-bouncy', 68, 0x58d9ff, 0x2e4057, 'bouncy');
     createCircleTexture(this, 'candy-ball-blast', 74, 0xff7a59, 0x2e4057, 'blast');
+    createCircleTexture(this, 'candy-ball-split', 74, 0x54d6bf, 0x2e4057, 'split');
     createCircleTexture(this, 'target-jar', 74, 0xff6f91, 0x2e4057);
     createTreasureChestTexture(this, 'treasure-chest', false);
     createTreasureChestTexture(this, 'treasure-chest-cracked', true);
@@ -36,7 +37,7 @@ function createCircleTexture(
   size: number,
   fill: number,
   stroke: number,
-  pattern: 'classic' | 'heavy' | 'bouncy' | 'blast' = 'classic',
+  pattern: 'classic' | 'heavy' | 'bouncy' | 'blast' | 'split' = 'classic',
 ): void {
   const graphics = scene.add.graphics();
   graphics.fillStyle(fill, 1);
@@ -68,6 +69,20 @@ function createCircleTexture(
     }
     graphics.fillStyle(0xffcf4d, 0.92);
     graphics.fillCircle(size * 0.5, size * 0.5, size * 0.13);
+  }
+  if (pattern === 'split') {
+    graphics.lineStyle(5, 0xffffff, 0.82);
+    for (const degrees of [-90, 30, 150]) {
+      const angle = (degrees * Math.PI) / 180;
+      graphics.lineBetween(
+        size / 2 + Math.cos(angle) * size * 0.1,
+        size / 2 + Math.sin(angle) * size * 0.1,
+        size / 2 + Math.cos(angle) * size * 0.3,
+        size / 2 + Math.sin(angle) * size * 0.3,
+      );
+    }
+    graphics.fillStyle(0xffcf4d, 0.94);
+    graphics.fillCircle(size * 0.5, size * 0.5, size * 0.14);
   }
   graphics.generateTexture(key, size, size);
   graphics.destroy();

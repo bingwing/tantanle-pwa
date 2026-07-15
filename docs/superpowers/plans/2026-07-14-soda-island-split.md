@@ -28,14 +28,14 @@
 **Interfaces:**
 - Produces: `ShotType` including `'split'`.
 - Produces: `resolveSplitShotVelocities(velocity: { x: number; y: number }, spreadDegrees: number): Array<{ x: number; y: number }>`.
-- Produces: `resolveShotAbility('split')` with kind `'split'` and `splitSpreadDegrees: 14`.
+- Produces: `resolveShotAbility('split')` with kind `'split'` and `splitSpreadDegrees: 20`.
 
 - [ ] **Step 1: Write the failing rules tests**
 
 ```ts
 expect(getShotTypeForIndex(4)).toBe('split');
 expect(resolveShotAbility('split').kind).toBe('split');
-expect(resolveSplitShotVelocities({ x: 12, y: 0 }, 14)).toHaveLength(3);
+expect(resolveSplitShotVelocities({ x: 12, y: 0 }, 20)).toHaveLength(3);
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -99,10 +99,10 @@ Expected: failure because the texture, set, and split method are absent.
 ```ts
 private splitActiveBall(): void {
   if (!this.activeBall) return;
-  const velocities = resolveSplitShotVelocities(this.activeBall.body.velocity, 14);
+  const velocities = resolveSplitShotVelocities(this.activeBall.body.velocity, 20);
   this.activeBall.setVelocity(velocities[1].x, velocities[1].y);
   for (const velocity of [velocities[0], velocities[2]]) {
-    const clone = this.matter.add.image(this.activeBall.x, this.activeBall.y, 'candy-ball-split') as MatterImage;
+    const clone = this.matter.add.image(this.activeBall.x, this.activeBall.y + (velocity.y < 0 ? -16 : 16), 'candy-ball-split') as MatterImage;
     clone.setCircle(31);
     clone.body.label = 'ball';
     clone.setVelocity(velocity.x, velocity.y);

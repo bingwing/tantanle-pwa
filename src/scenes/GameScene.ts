@@ -376,16 +376,18 @@ export class GameScene extends Phaser.Scene {
     floor.fillRoundedRect(0, 884, APP_WIDTH, 82, 18);
 
     for (const block of this.level.blocks) {
-      const sprite = this.matter.add.image(block.x, block.y, `block-${block.material}`, undefined, {
+      const blockBody = {
         density: MATERIAL_DENSITY[block.material],
         friction: 0.78,
         frictionAir: 0.012,
         restitution: block.material === 'jelly' ? 0.42 : 0.16,
+        isStatic: true,
         label: `block:${block.id}`,
-      }) as MatterImage;
+      };
+      const sprite = this.matter.add.image(block.x, block.y, `block-${block.material}`, undefined, blockBody) as MatterImage;
       sprite.gameId = block.id;
       sprite.setDisplaySize(block.width, block.height);
-      sprite.setRectangle(block.width, block.height);
+      sprite.setRectangle(block.width, block.height, blockBody);
       sprite.body.label = `block:${block.id}`;
       sprite.setTint(MATERIAL_TINT[block.material]);
       sprite.setAngle(block.angle ?? 0);
@@ -400,18 +402,20 @@ export class GameScene extends Phaser.Scene {
     for (const target of this.level.targets) {
       const kind = target.kind ?? 'jar';
       const isTreasureChest = kind === 'treasure-chest';
-      const sprite = this.matter.add.image(target.x, target.y, isTreasureChest ? 'treasure-chest' : 'target-jar', undefined, {
+      const targetBody = {
         density: isTreasureChest ? 0.0022 : 0.0012,
         friction: isTreasureChest ? 0.72 : 0.55,
         frictionAir: 0.01,
         restitution: isTreasureChest ? 0.16 : 0.24,
+        isStatic: true,
         label: `target:${target.id}`,
-      }) as MatterImage;
+      };
+      const sprite = this.matter.add.image(target.x, target.y, isTreasureChest ? 'treasure-chest' : 'target-jar', undefined, targetBody) as MatterImage;
       sprite.gameId = target.id;
       if (isTreasureChest) {
-        sprite.setRectangle(102, 72, { chamfer: { radius: 10 } });
+        sprite.setRectangle(102, 72, { ...targetBody, chamfer: { radius: 10 } });
       } else {
-        sprite.setCircle(33);
+        sprite.setCircle(33, targetBody);
         sprite.setScale(0.95);
       }
       sprite.body.label = `target:${target.id}`;
@@ -454,13 +458,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createCollectible(collectible: CollectibleDefinition): void {
-    const star = this.matter.add.image(collectible.x, collectible.y, 'bonus-star', undefined, {
+    const starBody = {
       isStatic: true,
       isSensor: true,
       label: `collectible:${collectible.id}`,
-    }) as MatterImage;
+    };
+    const star = this.matter.add.image(collectible.x, collectible.y, 'bonus-star', undefined, starBody) as MatterImage;
     star.gameId = collectible.id;
-    star.setCircle(30);
+    star.setCircle(30, starBody);
     star.body.label = `collectible:${collectible.id}`;
     star.body.isSensor = true;
     star.setDepth(12);
@@ -477,29 +482,32 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createHazard(hazard: HazardDefinition): void {
-    const bomb = this.matter.add.image(hazard.x, hazard.y, 'frosting-bomb', undefined, {
+    const bombBody = {
       density: 0.001,
       friction: 0.45,
       frictionAir: 0.01,
       restitution: 0.38,
+      isStatic: true,
       label: `hazard:${hazard.id}`,
-    }) as MatterImage;
+    };
+    const bomb = this.matter.add.image(hazard.x, hazard.y, 'frosting-bomb', undefined, bombBody) as MatterImage;
     bomb.gameId = hazard.id;
-    bomb.setCircle(34);
+    bomb.setCircle(34, bombBody);
     bomb.body.label = `hazard:${hazard.id}`;
     bomb.setDepth(13);
     this.hazards.set(hazard.id, bomb);
   }
 
   private createBumper(bumper: BumperDefinition): void {
-    const bumperBody = this.matter.add.image(bumper.x, bumper.y, 'bounce-pad', undefined, {
+    const bumperOptions = {
       isStatic: true,
       friction: 0.08,
       restitution: 1.18,
       label: `bumper:${bumper.id}`,
-    }) as MatterImage;
+    };
+    const bumperBody = this.matter.add.image(bumper.x, bumper.y, 'bounce-pad', undefined, bumperOptions) as MatterImage;
     bumperBody.gameId = bumper.id;
-    bumperBody.setRectangle(148, 42, { chamfer: { radius: 21 } });
+    bumperBody.setRectangle(148, 42, { ...bumperOptions, chamfer: { radius: 21 } });
     bumperBody.body.label = `bumper:${bumper.id}`;
     bumperBody.setAngle(bumper.angle ?? 0);
     bumperBody.setDepth(14);
@@ -525,7 +533,7 @@ export class GameScene extends Phaser.Scene {
       isSensor: true,
       label: entryLabel,
     }) as MatterImage;
-    entry.setCircle(43);
+    entry.setCircle(43, { isStatic: true, isSensor: true, label: entryLabel });
     entry.setStatic(true);
     entry.body.label = `portal:${portal.id}:entry`;
     entry.body.isSensor = true;
@@ -536,7 +544,7 @@ export class GameScene extends Phaser.Scene {
       isSensor: true,
       label: exitLabel,
     }) as MatterImage;
-    exit.setCircle(43);
+    exit.setCircle(43, { isStatic: true, isSensor: true, label: exitLabel });
     exit.setStatic(true);
     exit.body.label = `portal:${portal.id}:exit`;
     exit.body.isSensor = true;
@@ -597,15 +605,16 @@ export class GameScene extends Phaser.Scene {
     this.hideAbilityButton();
     this.drawLastTrajectory();
     const physics = resolveShotPhysics(this.currentShotType);
-    const ball = this.matter.add.image(SLINGSHOT.x, SLINGSHOT.y, SHOT_TEXTURE[this.currentShotType], undefined, {
+    const ballBody = {
       isStatic: true,
       restitution: physics.restitution,
       friction: 0.4,
       frictionAir: 0.01,
       density: physics.density,
       label: 'ball',
-    }) as MatterImage;
-    ball.setCircle(34);
+    };
+    const ball = this.matter.add.image(SLINGSHOT.x, SLINGSHOT.y, SHOT_TEXTURE[this.currentShotType], undefined, ballBody) as MatterImage;
+    ball.setCircle(34, ballBody);
     ball.body.label = 'ball';
     ball.setInteractive({ draggable: true, useHandCursor: true });
     ball.setDepth(20);
@@ -790,14 +799,15 @@ export class GameScene extends Phaser.Scene {
     ball.setAngularVelocity(0.26);
 
     for (const [index, velocity] of [velocities[0], velocities[2]].entries()) {
-      const clone = this.matter.add.image(ball.x, ball.y + (index === 0 ? -16 : 16), 'candy-ball-split', undefined, {
+      const cloneBody = {
         restitution: physics.restitution,
         friction: 0.4,
         frictionAir: 0.01,
         density: physics.density,
         label: 'ball',
-      }) as MatterImage;
-      clone.setCircle(34);
+      };
+      const clone = this.matter.add.image(ball.x, ball.y + (index === 0 ? -16 : 16), 'candy-ball-split', undefined, cloneBody) as MatterImage;
+      clone.setCircle(34, cloneBody);
       clone.body.label = 'ball';
       clone.setCollisionGroup(collisionGroup);
       clone.setVelocity(velocity.x, velocity.y);
@@ -857,9 +867,11 @@ export class GameScene extends Phaser.Scene {
         const bumperLabel = labels.find((label) => label.startsWith('bumper:'));
         const portalLabel = labels.find((label) => label.startsWith('portal:'));
         if (targetLabel) {
+          this.releaseImpactArea(ball.x, ball.y);
           this.damageTarget(targetLabel.replace('target:', ''));
         }
         if (blockLabel) {
+          this.releaseImpactArea(ball.x, ball.y);
           this.damageBlock(blockLabel.replace('block:', ''), 1);
           this.triggerShotBlast(pair.collision.supports?.[0]?.x ?? ball.x, pair.collision.supports?.[0]?.y ?? ball.y);
         }
@@ -1001,6 +1013,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private applyBlastForce(x: number, y: number, radius: number, force: number, damage = 2): void {
+    this.releaseImpactArea(x, y, radius);
     const bodies = [
       ...Array.from(this.blocks.entries(), ([id, block]) => ({ id, kind: 'block' as const, sprite: block.sprite })),
       ...Array.from(this.targets.entries(), ([id, target]) => ({ id, kind: 'target' as const, sprite: target.sprite })),
@@ -1024,6 +1037,19 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.cameras.main.shake(180, 0.012);
+  }
+
+  private releaseImpactArea(x: number, y: number, radius = 250): void {
+    for (const block of this.blocks.values()) {
+      if (Phaser.Math.Distance.Between(x, y, block.sprite.x, block.sprite.y) <= radius) {
+        block.sprite.setStatic(false);
+      }
+    }
+    for (const target of this.targets.values()) {
+      if (Phaser.Math.Distance.Between(x, y, target.sprite.x, target.sprite.y) <= radius) {
+        target.sprite.setStatic(false);
+      }
+    }
   }
 
   private damageTarget(id: string, amount = 1): void {

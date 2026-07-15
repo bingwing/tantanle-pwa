@@ -41,6 +41,7 @@ type TargetState = {
   kind: TargetKind;
   durability: number;
   hits: number;
+  released: boolean;
 };
 type PortalEndpointState = {
   destination: MatterImage;
@@ -204,7 +205,7 @@ export class GameScene extends Phaser.Scene {
 
     for (const [id, target] of this.targets) {
       target.label.setPosition(target.sprite.x, target.sprite.y + (target.kind === 'treasure-chest' ? 68 : 55));
-      if (this.worldReady && isTargetClearedByFall(target.sprite.y)) {
+      if (target.kind === 'jar' && target.released && isTargetClearedByFall(target.sprite.y)) {
         this.clearTarget(id);
       }
     }
@@ -442,6 +443,7 @@ export class GameScene extends Phaser.Scene {
         kind,
         durability: Math.max(1, target.durability ?? (isTreasureChest ? 3 : 1)),
         hits: 0,
+        released: false,
       });
     }
 
@@ -1073,6 +1075,7 @@ export class GameScene extends Phaser.Scene {
     }
     for (const target of this.targets.values()) {
       if (Phaser.Math.Distance.Between(x, y, target.sprite.x, target.sprite.y) <= radius) {
+        target.released = true;
         target.sprite.setStatic(false);
       }
     }

@@ -23,5 +23,7 @@ describe('treasure chest targets', () => {
     expect(gameSource).toContain('damageTarget');
     expect(gameSource).toContain('resolveTargetDamage');
     expect(gameSource).toContain("setTexture('treasure-chest-cracked')");
+    expect(gameSource).toContain("target.kind === 'jar' && target.released");
+    expect(gameSource).not.toContain("target.kind === 'treasure-chest' && target.released && isTargetClearedByFall");
   });
 });

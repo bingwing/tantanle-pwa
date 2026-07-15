@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { CandyAudio } from '../game/audio';
 import { loadSave } from '../game/save';
 import { LEVELS } from '../game/levels';
 
@@ -26,7 +27,9 @@ export class BootScene extends Phaser.Scene {
     createBlockTexture(this, 'block-glass', 120, 38, 0x87e8ff, 0x2e9fbd, drawGlassShine);
     createBlockTexture(this, 'block-stone', 120, 38, 0xa7adb8, 0x68717f, drawStoneSpeckles);
     createBlockTexture(this, 'block-jelly', 120, 38, 0x7fe3a1, 0x2e8e57, drawJellyBubbles);
-    this.registry.set('save', loadSave(window.localStorage, LEVELS));
+    const save = loadSave(window.localStorage, LEVELS);
+    this.registry.set('save', save);
+    this.registry.set('audio', new CandyAudio(save.soundEnabled));
     this.scene.start('MenuScene');
   }
 }

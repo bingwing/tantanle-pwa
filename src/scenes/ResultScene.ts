@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { CandyAudio } from '../game/audio';
 import { APP_WIDTH } from '../game/config';
 import { LEVELS } from '../game/levels';
 import { addButton } from './ui';
@@ -9,6 +10,7 @@ export class ResultScene extends Phaser.Scene {
   private score = 0;
   private stars = 0;
   private nextLevelId?: number;
+  private audio?: CandyAudio;
 
   constructor() {
     super('ResultScene');
@@ -23,6 +25,8 @@ export class ResultScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.audio = this.registry.get('audio') as CandyAudio | undefined;
+    this.audio?.play(this.won ? 'win' : 'lose');
     const bg = this.add.graphics();
     bg.fillGradientStyle(0x8ed8ff, 0xdff6ff, 0xfff0b5, 0xffffff, 1);
     bg.fillRect(0, 0, 900, 1200);

@@ -31,3 +31,7 @@ export function loadSave(storage: Storage, levels: LevelDefinition[]): GameSave 
 export function writeSave(storage: Storage, save: GameSave): void {
   storage.setItem(STORAGE_KEY, JSON.stringify(save));
 }
+
+export function updateSoundPreference(save: GameSave, soundEnabled: boolean): GameSave {
+  return { ...save, soundEnabled };
+}

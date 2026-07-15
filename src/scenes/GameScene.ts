@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { CandyAudio } from '../game/audio';
 import { APP_HEIGHT, APP_WIDTH, SLINGSHOT } from '../game/config';
 import { LEVELS } from '../game/levels';
 import {
@@ -24,11 +25,11 @@ import {
   shouldLaunchShot,
   updateLevelProgress,
 } from '../game/rules';
-import { writeSave } from '../game/save';
+import { updateSoundPreference, writeSave } from '../game/save';
 import { SHOT_LIFECYCLE, advanceShotLifecycle, createShotLifecycleState } from '../game/shotLifecycle';
 import type { BlockDefinition, BumperDefinition, CelebrationKind, CollectibleDefinition, GameSave, HazardDefinition, LevelDefinition, PortalDefinition, ShotType, TargetKind } from '../game/types';
 import { WORLD_SETTLE, isBodyMotionSettled, shouldFreezeWorld } from '../game/worldSettle';
-import { addButton } from './ui';
+import { addButton, addSoundToggle } from './ui';
 
 type MatterImage = Phaser.Physics.Matter.Image & { gameId?: string; body: MatterJS.BodyType };
 type BlockState = {
@@ -162,6 +163,7 @@ export class GameScene extends Phaser.Scene {
   private scorePopupPoints = 0;
   private scorePopupCombo = 0;
   private scorePopupTimer?: Phaser.Time.TimerEvent;
+  private audio?: CandyAudio;
   private targets = new Map<string, TargetState>();
   private blocks = new Map<string, BlockState>();
   private collectibles = new Map<string, MatterImage>();
@@ -220,6 +222,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.audio = this.registry.get('audio') as CandyAudio | undefined;
     this.matter.world.setBounds(0, 0, APP_WIDTH, APP_HEIGHT, 64);
     this.addBackground();
     this.addHud();
@@ -320,6 +323,16 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(31);
     this.createAbilityButton();
+    const save = this.registry.get('save') as GameSave;
+    addSoundToggle(this, 650, 56, save.soundEnabled, (enabled) => {
+      const updatedSave = updateSoundPreference(this.registry.get('save') as GameSave, enabled);
+      this.registry.set('save', updatedSave);
+      writeSave(window.localStorage, updatedSave);
+      this.audio?.setEnabled(enabled);
+      if (enabled) {
+        this.audio?.play('combo');
+      }
+    });
     addButton(this, 780, 56, 150, 58, '选关', () => this.scene.start('LevelScene'));
     this.refreshHud();
   }
@@ -921,6 +934,7 @@ export class GameScene extends Phaser.Scene {
     ball.setStatic(false);
     ball.setVelocity(velocity.x, velocity.y);
     ball.setAngularVelocity(0.18);
+    this.audio?.play('launch');
     this.clearAim();
     this.recordLastTrajectory();
     this.clearShotHalo();
@@ -938,6 +952,7 @@ export class GameScene extends Phaser.Scene {
     const velocity = this.activeBall.body.velocity;
     this.abilityUsed = true;
     this.consumeAbilityButton();
+    this.audio?.play(ability.kind === 'detonate' ? 'blast' : 'ability');
     if (ability.kind === 'split') {
       this.splitActiveBall(ability.splitSpreadDegrees ?? 20);
       return;
@@ -1090,6 +1105,7 @@ export class GameScene extends Phaser.Scene {
     ball.setAngularVelocity(0.42);
     this.score += transfer.score;
     this.comboCount += 1;
+    this.audio?.play('combo');
     this.showFeedback('彩虹穿梭', 1, 420);
     this.burst(endpoint.destination.x, endpoint.destination.y, 0xff6f91, 38);
     this.showScorePop(endpoint.destination.x, endpoint.destination.y - 58, transfer.score, 0x58d9ff);
@@ -1117,6 +1133,7 @@ export class GameScene extends Phaser.Scene {
     ball.setAngularVelocity(0.32);
     this.score += hit.score;
     this.comboCount += 1;
+    this.audio?.play('impact');
     this.showFeedback('弹力糖垫反弹', 1, 420);
     this.burst(bumper.x, bumper.y, 0xffcf4d, 26);
     this.showScorePop(bumper.x, bumper.y - 42, hit.score, 0xffcf4d);
@@ -1142,6 +1159,7 @@ export class GameScene extends Phaser.Scene {
     const points = resolveCollectibleScore('star');
     this.score += points;
     this.comboCount += 1;
+    this.audio?.play('combo');
     this.showFeedback('星星糖收集', 1, 420);
     this.burst(star.x, star.y, 0xffcf4d, 24);
     this.showScorePop(star.x, star.y - 24, points, 0xffcf4d);
@@ -1161,6 +1179,7 @@ export class GameScene extends Phaser.Scene {
     const blast = resolveBombBlast('frosting-bomb');
     this.score += blast.score;
     this.comboCount += 1;
+    this.audio?.play('blast');
     this.showFeedback('糖霜爆开啦', 1, 480);
     this.burst(bomb.x, bomb.y, 0xff8fb3, 54);
     this.showScorePop(bomb.x, bomb.y - 30, blast.score, 0xff8fb3);
@@ -1179,6 +1198,7 @@ export class GameScene extends Phaser.Scene {
 
     this.score += blast.score;
     this.comboCount += 1;
+    this.audio?.play('blast');
     this.showFeedback('爆爆糖球炸开', 1, 480);
     this.burst(x, y, 0xff7a59, 42);
     this.showScorePop(x, y - 28, blast.score, 0xff7a59);
@@ -1235,6 +1255,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    this.audio?.play('impact');
     target.hits += amount;
     const damage = resolveTargetDamage(target.kind, target.hits, target.durability);
     if (damage.score > 0) {
@@ -1275,6 +1296,7 @@ export class GameScene extends Phaser.Scene {
     const points = resolveShotScore({ targetsCleared: 1, blocksBroken: 0, shotsLeft: this.shotsLeft });
     this.score += points;
     this.comboCount += 1;
+    this.audio?.play('combo');
     const sprite = target.sprite;
     const isTreasureChest = target.kind === 'treasure-chest';
     const color = isTreasureChest ? 0xffcf4d : 0xff6f91;
@@ -1330,6 +1352,7 @@ export class GameScene extends Phaser.Scene {
     this.blocksBroken += 1;
     this.score += points;
     this.comboCount += 1;
+    this.audio?.play('impact');
     const sprite = block.sprite;
     const damageRatio = Math.min(1, block.hits / block.durability);
     sprite.setAlpha(destroyed ? 0.48 : 0.84 - damageRatio * 0.2);
@@ -1374,6 +1397,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.score += bonus;
+    this.audio?.play('combo');
     this.showScorePop(x, y, bonus, 0xff6f91, this.comboCount);
     this.triggerSugarRush();
   }

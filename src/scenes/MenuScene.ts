@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
+import type { CandyAudio } from '../game/audio';
 import { APP_HEIGHT, APP_WIDTH } from '../game/config';
-import { addButton } from './ui';
+import { updateSoundPreference, writeSave } from '../game/save';
+import type { GameSave } from '../game/types';
+import { addButton, addSoundToggle } from './ui';
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -9,6 +12,7 @@ export class MenuScene extends Phaser.Scene {
 
   create(): void {
     this.addBackground();
+    this.addSoundControl();
     this.add
       .text(APP_WIDTH / 2, 168, '弹弹乐', {
         fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif',
@@ -32,6 +36,20 @@ export class MenuScene extends Phaser.Scene {
     this.add.image(710, 610, 'target-jar').setScale(1.25);
     this.drawSampleTower();
     addButton(this, APP_WIDTH / 2, APP_HEIGHT - 180, 360, 84, '开始游戏', () => this.scene.start('LevelScene'));
+  }
+
+  private addSoundControl(): void {
+    const save = this.registry.get('save') as GameSave;
+    const audio = this.registry.get('audio') as CandyAudio | undefined;
+    addSoundToggle(this, 820, 60, save.soundEnabled, (enabled) => {
+      const updatedSave = updateSoundPreference(this.registry.get('save') as GameSave, enabled);
+      this.registry.set('save', updatedSave);
+      writeSave(window.localStorage, updatedSave);
+      audio?.setEnabled(enabled);
+      if (enabled) {
+        audio?.play('combo');
+      }
+    });
   }
 
   private addBackground(): void {

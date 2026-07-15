@@ -2,16 +2,30 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 describe('stable level startup', () => {
-  it('keeps destructible bodies fixed until a local impact releases them', () => {
+  it('settles destructible bodies before freezing the world and spawning the first ball', () => {
     const gameSource = readFileSync(new URL('../src/scenes/GameScene.ts', import.meta.url), 'utf8');
 
-    expect(gameSource).toContain("isStatic: true,\n        label: `block:${block.id}`,");
-    expect(gameSource).toContain("isStatic: true,\n        label: `target:${target.id}`,");
+    expect(gameSource).toContain('const WORLD_SETTLE_MS = 650;');
+    expect(gameSource).toContain('private worldReady = false;');
+    expect(gameSource).toContain("this.feedback?.setText('糖果塔准备中');");
+    expect(gameSource).toContain('private settleWorldAndSpawnBall(): void');
+    expect(gameSource).toContain('this.time.delayedCall(WORLD_SETTLE_MS');
+    expect(gameSource).toContain("isStatic: false,\n        label: `block:${block.id}`,");
+    expect(gameSource).toContain("isStatic: false,\n        label: `target:${target.id}`,");
+    expect(gameSource).toContain('block.sprite.setStatic(true)');
+    expect(gameSource).toContain('target.sprite.setStatic(true)');
+    expect(gameSource).toContain('hazard.setStatic(true)');
+    expect(gameSource).toContain('this.worldReady = true;\n      this.spawnBall();');
+    expect(gameSource).toContain('if (!this.worldReady || this.shotInFlight || !this.activeBall)');
+    expect(gameSource).toContain('this.worldReady && isTargetClearedByFall(target.sprite.y)');
+    expect(gameSource).not.toContain('this.bindShotInput();\n    this.spawnBall();');
+  });
+
+  it('keeps complete Matter options when rebuilding body shapes', () => {
+    const gameSource = readFileSync(new URL('../src/scenes/GameScene.ts', import.meta.url), 'utf8');
+
     expect(gameSource).toContain('sprite.setRectangle(block.width, block.height, blockBody);');
     expect(gameSource).toContain('sprite.setCircle(33, targetBody);');
     expect(gameSource).toContain('ball.setCircle(34, ballBody);');
-    expect(gameSource).toContain('private releaseImpactArea');
-    expect(gameSource).toContain('this.releaseImpactArea(ball.x, ball.y);');
-    expect(gameSource).toContain('this.releaseImpactArea(x, y, radius);');
   });
 });

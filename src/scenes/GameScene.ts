@@ -109,6 +109,8 @@ const SUGAR_RUSH_METER = {
   gap: 7,
 } as const;
 
+const WORLD_SETTLE_MS = 650;
+
 export class GameScene extends Phaser.Scene {
   private level!: LevelDefinition;
   private shotsLeft = 0;
@@ -147,6 +149,7 @@ export class GameScene extends Phaser.Scene {
   private abilityUsed = false;
   private sugarRushAwarded = false;
   private levelEnding = false;
+  private worldReady = false;
 
   constructor() {
     super('GameScene');
@@ -177,6 +180,7 @@ export class GameScene extends Phaser.Scene {
     this.abilityUsed = false;
     this.sugarRushAwarded = false;
     this.levelEnding = false;
+    this.worldReady = false;
   }
 
   create(): void {
@@ -186,7 +190,8 @@ export class GameScene extends Phaser.Scene {
     this.createWorld();
     this.createSlingshot();
     this.bindShotInput();
-    this.spawnBall();
+    this.feedback?.setText('糖果塔准备中');
+    this.settleWorldAndSpawnBall();
     this.matter.world.on('collisionstart', (event: Phaser.Physics.Matter.Events.CollisionStartEvent) => {
       this.handleCollisions(event);
     });
@@ -199,7 +204,7 @@ export class GameScene extends Phaser.Scene {
 
     for (const [id, target] of this.targets) {
       target.label.setPosition(target.sprite.x, target.sprite.y + (target.kind === 'treasure-chest' ? 68 : 55));
-      if (isTargetClearedByFall(target.sprite.y)) {
+      if (this.worldReady && isTargetClearedByFall(target.sprite.y)) {
         this.clearTarget(id);
       }
     }
@@ -381,7 +386,7 @@ export class GameScene extends Phaser.Scene {
         friction: 0.78,
         frictionAir: 0.012,
         restitution: block.material === 'jelly' ? 0.42 : 0.16,
-        isStatic: true,
+        isStatic: false,
         label: `block:${block.id}`,
       };
       const sprite = this.matter.add.image(block.x, block.y, `block-${block.material}`, undefined, blockBody) as MatterImage;
@@ -407,7 +412,7 @@ export class GameScene extends Phaser.Scene {
         friction: isTreasureChest ? 0.72 : 0.55,
         frictionAir: 0.01,
         restitution: isTreasureChest ? 0.16 : 0.24,
-        isStatic: true,
+        isStatic: false,
         label: `target:${target.id}`,
       };
       const sprite = this.matter.add.image(target.x, target.y, isTreasureChest ? 'treasure-chest' : 'target-jar', undefined, targetBody) as MatterImage;
@@ -457,6 +462,27 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private settleWorldAndSpawnBall(): void {
+    this.time.delayedCall(WORLD_SETTLE_MS, () => {
+      if (!this.scene.isActive('GameScene') || this.levelEnding) {
+        return;
+      }
+
+      for (const block of this.blocks.values()) {
+        block.sprite.setStatic(true);
+      }
+      for (const target of this.targets.values()) {
+        target.sprite.setStatic(true);
+      }
+      for (const hazard of this.hazards.values()) {
+        hazard.setStatic(true);
+      }
+
+      this.worldReady = true;
+      this.spawnBall();
+    });
+  }
+
   private createCollectible(collectible: CollectibleDefinition): void {
     const starBody = {
       isStatic: true,
@@ -487,7 +513,7 @@ export class GameScene extends Phaser.Scene {
       friction: 0.45,
       frictionAir: 0.01,
       restitution: 0.38,
-      isStatic: true,
+      isStatic: false,
       label: `hazard:${hazard.id}`,
     };
     const bomb = this.matter.add.image(hazard.x, hazard.y, 'frosting-bomb', undefined, bombBody) as MatterImage;
@@ -652,7 +678,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private startDraggingBall(pointer: Phaser.Input.Pointer): void {
-    if (this.shotInFlight || !this.activeBall) {
+    if (!this.worldReady || this.shotInFlight || !this.activeBall) {
       return;
     }
 

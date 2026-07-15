@@ -25,6 +25,7 @@ import {
   updateLevelProgress,
 } from '../game/rules';
 import { writeSave } from '../game/save';
+import { SHOT_LIFECYCLE, advanceShotLifecycle, createShotLifecycleState } from '../game/shotLifecycle';
 import type { BlockDefinition, BumperDefinition, CelebrationKind, CollectibleDefinition, GameSave, HazardDefinition, LevelDefinition, PortalDefinition, ShotType, TargetKind } from '../game/types';
 import { WORLD_SETTLE, isBodyMotionSettled, shouldFreezeWorld } from '../game/worldSettle';
 import { addButton } from './ui';
@@ -150,6 +151,7 @@ export class GameScene extends Phaser.Scene {
   private sugarRushAwarded = false;
   private levelEnding = false;
   private worldReady = false;
+  private shotLifecycle = createShotLifecycleState();
 
   constructor() {
     super('GameScene');
@@ -181,6 +183,7 @@ export class GameScene extends Phaser.Scene {
     this.sugarRushAwarded = false;
     this.levelEnding = false;
     this.worldReady = false;
+    this.shotLifecycle = createShotLifecycleState();
   }
 
   create(): void {
@@ -197,9 +200,24 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  update(): void {
-    if (this.targets.size === 0) {
-      return;
+  update(_time: number, delta: number): void {
+    if (this.shotInFlight) {
+      const result = advanceShotLifecycle(
+        this.shotLifecycle,
+        delta,
+        Array.from(this.activeBalls, (ball) => ({
+          x: ball.x,
+          y: ball.y,
+          speed: ball.body.speed,
+          angularSpeed: ball.body.angularSpeed,
+        })),
+        APP_WIDTH,
+        APP_HEIGHT,
+      );
+      this.shotLifecycle = result.state;
+      if (result.shouldEnd) {
+        this.endShot();
+      }
     }
 
     for (const [id, target] of this.targets) {
@@ -641,6 +659,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private spawnBall(): void {
+    if (!this.worldReady || this.levelEnding || this.shotInFlight || this.activeBall) {
+      return;
+    }
     if (this.shotsLeft <= 0 || this.targets.size === 0) {
       this.finishIfNeeded();
       return;
@@ -786,6 +807,7 @@ export class GameScene extends Phaser.Scene {
     };
     this.isDragging = false;
     this.shotInFlight = true;
+    this.shotLifecycle = createShotLifecycleState();
     this.shotsLeft -= 1;
     this.shotIndex += 1;
     ball.setStatic(false);
@@ -797,7 +819,6 @@ export class GameScene extends Phaser.Scene {
     this.feedback?.setText(`${SHOT_LABEL[this.currentShotType]}出击`);
     this.refreshHud();
     this.showAbilityButton();
-    this.time.delayedCall(5200, () => this.endShot());
   }
 
   private activateShotAbility(): void {
@@ -1372,8 +1393,18 @@ export class GameScene extends Phaser.Scene {
     this.shotInFlight = false;
     this.comboCount = 0;
     this.finishIfNeeded();
-    if (this.scene.isActive('GameScene')) {
-      this.spawnBall();
+    if (this.shotsLeft > 0 && this.targets.size > 0 && !this.levelEnding) {
+      this.time.delayedCall(SHOT_LIFECYCLE.nextBallDelayMs, () => {
+        if (
+          this.scene.isActive('GameScene') &&
+          !this.levelEnding &&
+          !this.shotInFlight &&
+          !this.activeBall &&
+          this.targets.size > 0
+        ) {
+          this.spawnBall();
+        }
+      });
     }
   }
 

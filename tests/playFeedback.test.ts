@@ -16,5 +16,8 @@ describe('play feedback hooks', () => {
     expect(source).toContain('triggerBumper');
     expect(source).toContain('celebrateImpact');
     expect(source).toContain('showComboText');
+    expect(source).toContain('scorePopupPoints');
+    expect(source).toContain('feedbackProtectedUntil');
+    expect(source).not.toContain('const comboText = this.add');
   });
 });

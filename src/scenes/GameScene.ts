@@ -104,6 +104,23 @@ const SHOT_ABILITY_FEEDBACK: Record<ShotType, string> = {
   split: '彩虹三连弹',
 };
 
+const SHOT_ABILITY_LABEL: Record<ShotType, string> = {
+  classic: '冲刺',
+  heavy: '坠击',
+  bouncy: '跃起',
+  blast: '引爆',
+  split: '分裂',
+};
+
+const IMPACT_TEXT_STYLE: Phaser.Types.GameObjects.Text.TextStyle = {
+  fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif',
+  fontSize: '30px',
+  color: '#ff6f91',
+  fontStyle: '900',
+  stroke: '#ffffff',
+  strokeThickness: 6,
+};
+
 const SUGAR_RUSH_METER = {
   x: 610,
   y: 154,
@@ -136,6 +153,15 @@ export class GameScene extends Phaser.Scene {
   private abilityButtonBackground?: Phaser.GameObjects.Graphics;
   private abilityButtonIcon?: Phaser.GameObjects.Text;
   private abilityButtonPulse?: Phaser.GameObjects.Arc;
+  private abilityButtonLabel?: Phaser.GameObjects.Text;
+  private abilityProgress?: Phaser.GameObjects.Graphics;
+  private abilityButtonHit?: Phaser.GameObjects.Zone;
+  private feedbackPriority = 0;
+  private feedbackProtectedUntil = 0;
+  private scorePopup?: Phaser.GameObjects.Text;
+  private scorePopupPoints = 0;
+  private scorePopupCombo = 0;
+  private scorePopupTimer?: Phaser.Time.TimerEvent;
   private targets = new Map<string, TargetState>();
   private blocks = new Map<string, BlockState>();
   private collectibles = new Map<string, MatterImage>();
@@ -177,6 +203,7 @@ export class GameScene extends Phaser.Scene {
     this.currentShotType = 'classic';
     this.shotIndex = 0;
     this.currentTrajectoryPreview = [];
+    this.isDragging = false;
     this.shotInFlight = false;
     this.comboCount = 0;
     this.abilityUsed = false;
@@ -184,6 +211,12 @@ export class GameScene extends Phaser.Scene {
     this.levelEnding = false;
     this.worldReady = false;
     this.shotLifecycle = createShotLifecycleState();
+    this.feedbackPriority = 0;
+    this.feedbackProtectedUntil = 0;
+    this.scorePopup = undefined;
+    this.scorePopupPoints = 0;
+    this.scorePopupCombo = 0;
+    this.scorePopupTimer = undefined;
   }
 
   create(): void {
@@ -193,7 +226,7 @@ export class GameScene extends Phaser.Scene {
     this.createWorld();
     this.createSlingshot();
     this.bindShotInput();
-    this.feedback?.setText('糖果塔准备中');
+    this.showFeedback('糖果塔准备中');
     this.settleWorldAndSpawnBall();
     this.matter.world.on('collisionstart', (event: Phaser.Physics.Matter.Events.CollisionStartEvent) => {
       this.handleCollisions(event);
@@ -215,6 +248,7 @@ export class GameScene extends Phaser.Scene {
         APP_HEIGHT,
       );
       this.shotLifecycle = result.state;
+      this.drawAbilityProgress(result.state.elapsedMs);
       if (result.shouldEnd) {
         this.endShot();
       }
@@ -297,6 +331,23 @@ export class GameScene extends Phaser.Scene {
     this.drawSugarRushMeter();
   }
 
+  private showFeedback(message: string, priority = 0, protectMs = 260): void {
+    if (!this.feedback || (this.time.now < this.feedbackProtectedUntil && priority < this.feedbackPriority)) {
+      return;
+    }
+
+    this.feedbackPriority = priority;
+    this.feedbackProtectedUntil = this.time.now + protectMs;
+    this.feedback.setText(message).setAlpha(1).setScale(0.92);
+    this.tweens.killTweensOf(this.feedback);
+    this.tweens.add({
+      targets: this.feedback,
+      scale: 1,
+      duration: 140,
+      ease: 'Back.out',
+    });
+  }
+
   private drawSugarRushMeter(): void {
     if (!this.sugarRushMeter) {
       return;
@@ -331,18 +382,29 @@ export class GameScene extends Phaser.Scene {
   private createAbilityButton(): void {
     const pulse = this.add.circle(0, 0, 68, 0xffffff, 0.14).setStrokeStyle(5, 0xffffff, 0.78);
     const background = this.add.graphics();
+    const progress = this.add.graphics();
     const icon = this.add
       .text(0, 0, '', {
         fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif',
-        fontSize: '58px',
+        fontSize: '52px',
         color: '#ffffff',
         fontStyle: '900',
         stroke: '#2e4057',
         strokeThickness: 6,
       })
       .setOrigin(0.5);
-    const hit = this.add.zone(0, 0, 142, 142).setInteractive({ useHandCursor: true });
-    const button = this.add.container(815, 1060, [pulse, background, icon, hit]).setDepth(85).setVisible(false);
+    const label = this.add
+      .text(0, 79, '', {
+        fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif',
+        fontSize: '24px',
+        color: '#ffffff',
+        fontStyle: '900',
+        stroke: '#2e4057',
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5);
+    const hit = this.add.zone(0, 14, 156, 178).setInteractive({ useHandCursor: true });
+    const button = this.add.container(810, 1048, [pulse, background, progress, icon, label, hit]).setDepth(85).setVisible(false);
     hit.on('pointerdown', () => button.setScale(0.92));
     hit.on('pointerup', () => {
       button.setScale(1);
@@ -353,10 +415,20 @@ export class GameScene extends Phaser.Scene {
     this.abilityButtonBackground = background;
     this.abilityButtonIcon = icon;
     this.abilityButtonPulse = pulse;
+    this.abilityButtonLabel = label;
+    this.abilityProgress = progress;
+    this.abilityButtonHit = hit;
   }
 
   private showAbilityButton(): void {
-    if (!this.abilityButton || !this.abilityButtonBackground || !this.abilityButtonIcon || !this.abilityButtonPulse) {
+    if (
+      !this.abilityButton ||
+      !this.abilityButtonBackground ||
+      !this.abilityButtonIcon ||
+      !this.abilityButtonPulse ||
+      !this.abilityButtonLabel ||
+      !this.abilityButtonHit
+    ) {
       return;
     }
 
@@ -371,8 +443,11 @@ export class GameScene extends Phaser.Scene {
     this.abilityButtonBackground.lineStyle(4, 0xffffff, 0.68);
     this.abilityButtonBackground.strokeCircle(0, 0, 49);
     this.abilityButtonIcon.setText(SHOT_ABILITY_ICON[this.currentShotType]);
+    this.abilityButtonLabel.setText(SHOT_ABILITY_LABEL[this.currentShotType]);
     this.abilityButtonPulse.setFillStyle(tint, 0.16).setStrokeStyle(5, tint, 0.76).setScale(0.88).setAlpha(0.92);
     this.abilityButton.setScale(1).setVisible(true);
+    this.abilityButtonHit.setInteractive({ useHandCursor: true });
+    this.drawAbilityProgress(0);
     this.tweens.killTweensOf(this.abilityButtonPulse);
     this.tweens.add({
       targets: this.abilityButtonPulse,
@@ -389,7 +464,40 @@ export class GameScene extends Phaser.Scene {
     if (this.abilityButtonPulse) {
       this.tweens.killTweensOf(this.abilityButtonPulse);
     }
+    this.abilityButtonHit?.disableInteractive();
+    this.abilityProgress?.clear();
     this.abilityButton?.setVisible(false).setScale(1);
+  }
+
+  private drawAbilityProgress(elapsedMs: number): void {
+    if (!this.abilityProgress || !this.abilityButton?.visible) {
+      return;
+    }
+
+    const remaining = 1 - Phaser.Math.Clamp(elapsedMs / SHOT_LIFECYCLE.maxFlightMs, 0, 1);
+    this.abilityProgress.clear();
+    this.abilityProgress.lineStyle(7, 0x2e4057, 0.24);
+    this.abilityProgress.strokeCircle(0, 0, 70);
+    this.abilityProgress.lineStyle(7, 0xffffff, 0.94);
+    this.abilityProgress.beginPath();
+    this.abilityProgress.arc(0, 0, 70, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remaining);
+    this.abilityProgress.strokePath();
+  }
+
+  private consumeAbilityButton(): void {
+    this.abilityButtonHit?.disableInteractive();
+    this.abilityButtonLabel?.setText('已触发');
+    this.abilityProgress?.clear();
+    if (this.abilityButton) {
+      this.tweens.add({
+        targets: this.abilityButton,
+        scale: 1.1,
+        duration: 90,
+        yoyo: true,
+        ease: 'Sine.out',
+      });
+    }
+    this.time.delayedCall(180, () => this.hideAbilityButton());
   }
 
   private createWorld(): void {
@@ -688,7 +796,7 @@ export class GameScene extends Phaser.Scene {
     ball.setDepth(20);
     this.activeBall = ball;
     this.activeBalls.add(ball);
-    this.feedback?.setText(`${SHOT_LABEL[this.currentShotType]}准备好`);
+    this.showFeedback(`${SHOT_LABEL[this.currentShotType]}准备好`);
     this.refreshHud();
 
     this.addShotHalo(ball);
@@ -796,7 +904,7 @@ export class GameScene extends Phaser.Scene {
       this.isDragging = false;
       ball.setPosition(SLINGSHOT.x, SLINGSHOT.y);
       this.clearAim();
-      this.feedback?.setText('再拉远一点');
+      this.showFeedback('再拉远一点');
       return;
     }
 
@@ -816,7 +924,7 @@ export class GameScene extends Phaser.Scene {
     this.clearAim();
     this.recordLastTrajectory();
     this.clearShotHalo();
-    this.feedback?.setText(`${SHOT_LABEL[this.currentShotType]}出击`);
+    this.showFeedback(`${SHOT_LABEL[this.currentShotType]}出击`);
     this.refreshHud();
     this.showAbilityButton();
   }
@@ -829,7 +937,7 @@ export class GameScene extends Phaser.Scene {
     const ability = resolveShotAbility(this.currentShotType);
     const velocity = this.activeBall.body.velocity;
     this.abilityUsed = true;
-    this.hideAbilityButton();
+    this.consumeAbilityButton();
     if (ability.kind === 'split') {
       this.splitActiveBall(ability.splitSpreadDegrees ?? 20);
       return;
@@ -850,7 +958,7 @@ export class GameScene extends Phaser.Scene {
       );
       this.celebrateImpact(this.activeBall.x, this.activeBall.y, 'big-blast');
     }
-    this.feedback?.setText(SHOT_ABILITY_FEEDBACK[this.currentShotType]);
+    this.showFeedback(SHOT_ABILITY_FEEDBACK[this.currentShotType], 1, 420);
   }
 
   private splitActiveBall(spreadDegrees: number): void {
@@ -887,7 +995,7 @@ export class GameScene extends Phaser.Scene {
     this.burst(ball.x, ball.y, SHOT_TINT.split, 64);
     this.cameras.main.flash(150, 104, 236, 209, false);
     this.cameras.main.shake(170, 0.013);
-    this.feedback?.setText(SHOT_ABILITY_FEEDBACK.split);
+    this.showFeedback(SHOT_ABILITY_FEEDBACK.split, 1, 420);
   }
 
   private clearAim(): void {
@@ -982,7 +1090,7 @@ export class GameScene extends Phaser.Scene {
     ball.setAngularVelocity(0.42);
     this.score += transfer.score;
     this.comboCount += 1;
-    this.feedback?.setText('彩虹穿梭');
+    this.showFeedback('彩虹穿梭', 1, 420);
     this.burst(endpoint.destination.x, endpoint.destination.y, 0xff6f91, 38);
     this.showScorePop(endpoint.destination.x, endpoint.destination.y - 58, transfer.score, 0x58d9ff);
     this.showComboText(endpoint.destination.x, endpoint.destination.y - 104);
@@ -1009,7 +1117,7 @@ export class GameScene extends Phaser.Scene {
     ball.setAngularVelocity(0.32);
     this.score += hit.score;
     this.comboCount += 1;
-    this.feedback?.setText('弹力糖垫反弹');
+    this.showFeedback('弹力糖垫反弹', 1, 420);
     this.burst(bumper.x, bumper.y, 0xffcf4d, 26);
     this.showScorePop(bumper.x, bumper.y - 42, hit.score, 0xffcf4d);
     this.showComboText(bumper.x, bumper.y - 88);
@@ -1034,7 +1142,7 @@ export class GameScene extends Phaser.Scene {
     const points = resolveCollectibleScore('star');
     this.score += points;
     this.comboCount += 1;
-    this.feedback?.setText('星星糖收集');
+    this.showFeedback('星星糖收集', 1, 420);
     this.burst(star.x, star.y, 0xffcf4d, 24);
     this.showScorePop(star.x, star.y - 24, points, 0xffcf4d);
     this.showComboText(star.x, star.y - 74);
@@ -1053,7 +1161,7 @@ export class GameScene extends Phaser.Scene {
     const blast = resolveBombBlast('frosting-bomb');
     this.score += blast.score;
     this.comboCount += 1;
-    this.feedback?.setText('糖霜爆开啦');
+    this.showFeedback('糖霜爆开啦', 1, 480);
     this.burst(bomb.x, bomb.y, 0xff8fb3, 54);
     this.showScorePop(bomb.x, bomb.y - 30, blast.score, 0xff8fb3);
     this.showComboText(bomb.x, bomb.y - 82);
@@ -1071,7 +1179,7 @@ export class GameScene extends Phaser.Scene {
 
     this.score += blast.score;
     this.comboCount += 1;
-    this.feedback?.setText('爆爆糖球炸开');
+    this.showFeedback('爆爆糖球炸开', 1, 480);
     this.burst(x, y, 0xff7a59, 42);
     this.showScorePop(x, y - 28, blast.score, 0xff7a59);
     this.showComboText(x, y - 76);
@@ -1141,7 +1249,7 @@ export class GameScene extends Phaser.Scene {
     const sprite = target.sprite;
     this.comboCount += 1;
     sprite.setTexture('treasure-chest-cracked');
-    this.feedback?.setText(target.hits === 1 ? '宝箱裂开啦，再来一下' : '宝藏要出来啦');
+    this.showFeedback(target.hits === 1 ? '宝箱裂开啦，再来一下' : '宝藏要出来啦', 2, 620);
     this.burst(sprite.x, sprite.y, 0x58d9ff, target.hits === 1 ? 26 : 38);
     this.showComboText(sprite.x, sprite.y - 100);
     this.tweens.add({
@@ -1170,7 +1278,7 @@ export class GameScene extends Phaser.Scene {
     const sprite = target.sprite;
     const isTreasureChest = target.kind === 'treasure-chest';
     const color = isTreasureChest ? 0xffcf4d : 0xff6f91;
-    this.feedback?.setText(isTreasureChest ? '宝箱打开，糖果宝藏喷出来啦' : '糖果罐打飞啦');
+    this.showFeedback(isTreasureChest ? '宝箱打开，糖果宝藏喷出来啦' : '糖果罐打飞啦', 2, 820);
     this.burst(sprite.x, sprite.y, color, isTreasureChest ? 58 : 32);
     this.showScorePop(sprite.x, sprite.y - 32, points, color);
     this.showComboText(sprite.x, sprite.y - 84);
@@ -1206,7 +1314,7 @@ export class GameScene extends Phaser.Scene {
     });
     fireworks.explode(celebration.particles);
     this.showScorePop(x, y - 104, celebration.score, 0xff6f91);
-    this.feedback?.setText(kind === 'target-clear' ? '糖果礼花' : '彩糖连锁');
+    this.showFeedback(kind === 'target-clear' ? '糖果礼花' : '彩糖连锁', 0, 320);
     this.cameras.main.shake(220, celebration.shake);
     this.time.delayedCall(920, () => fireworks.destroy());
   }
@@ -1266,26 +1374,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.score += bonus;
-    const comboText = this.add
-      .text(x, y, `连击 x${this.comboCount}  +${bonus}`, {
-        fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif',
-        fontSize: '28px',
-        color: '#ff6f91',
-        fontStyle: '900',
-        stroke: '#ffffff',
-        strokeThickness: 6,
-      })
-      .setOrigin(0.5)
-      .setDepth(42);
-    this.tweens.add({
-      targets: comboText,
-      y: y - 72,
-      scale: 1.18,
-      alpha: 0,
-      duration: 820,
-      ease: 'Back.out',
-      onComplete: () => comboText.destroy(),
-    });
+    this.showScorePop(x, y, bonus, 0xff6f91, this.comboCount);
     this.triggerSugarRush();
   }
 
@@ -1298,11 +1387,11 @@ export class GameScene extends Phaser.Scene {
     this.sugarRushAwarded = true;
     this.shotsLeft += reward.extraShots;
     this.score += reward.score;
-    this.feedback?.setText('糖果狂热！奖励糖果球');
+    this.showFeedback('糖果狂热！奖励糖果球', 3, 1100);
     const banner = this.add
-      .text(APP_WIDTH / 2, 255, `糖果狂热！\n+${reward.extraShots} 糖果球`, {
+      .text(APP_WIDTH / 2, 270, `糖果狂热！\n+${reward.extraShots} 糖果球`, {
         fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif',
-        fontSize: '50px',
+        fontSize: '42px',
         color: '#2e4057',
         align: 'center',
         fontStyle: '900',
@@ -1339,27 +1428,54 @@ export class GameScene extends Phaser.Scene {
     this.refreshHud();
   }
 
-  private showScorePop(x: number, y: number, points: number, color: number): void {
-    const pop = this.add
-      .text(x, y, `+${points}`, {
-        fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif',
-        fontSize: '30px',
-        color: Phaser.Display.Color.IntegerToColor(color).rgba,
-        fontStyle: '900',
-        stroke: '#ffffff',
-        strokeThickness: 6,
-      })
-      .setOrigin(0.5)
-      .setDepth(40);
+  private showScorePop(x: number, y: number, points: number, color: number, combo = 0): void {
+    if (!this.scorePopup?.active) {
+      this.scorePopupPoints = 0;
+      this.scorePopupCombo = 0;
+      this.scorePopup = this.add.text(x, y, '', IMPACT_TEXT_STYLE).setOrigin(0.5).setDepth(44);
+    }
+
+    this.scorePopupPoints += points;
+    this.scorePopupCombo = Math.max(this.scorePopupCombo, combo);
+    this.scorePopup
+      .setPosition(Phaser.Math.Clamp(x, 110, APP_WIDTH - 110), Phaser.Math.Clamp(y, 230, 820))
+      .setText(`+${this.scorePopupPoints}${this.scorePopupCombo >= 2 ? `  连击 x${this.scorePopupCombo}` : ''}`)
+      .setColor(Phaser.Display.Color.IntegerToColor(color).rgba)
+      .setAlpha(1)
+      .setScale(0.88);
+    this.tweens.killTweensOf(this.scorePopup);
+    this.tweens.add({
+      targets: this.scorePopup,
+      scale: 1.06,
+      y: this.scorePopup.y - 12,
+      duration: 130,
+      ease: 'Back.out',
+    });
+    this.scorePopupTimer?.remove(false);
+    this.scorePopupTimer = this.time.delayedCall(520, () => this.fadeScorePopup());
+  }
+
+  private fadeScorePopup(): void {
+    const popup = this.scorePopup;
+    this.scorePopupTimer = undefined;
+    if (!popup?.active) {
+      return;
+    }
 
     this.tweens.add({
-      targets: pop,
-      y: y - 62,
-      scale: 1.25,
+      targets: popup,
+      y: popup.y - 54,
       alpha: 0,
-      duration: 760,
-      ease: 'Back.out',
-      onComplete: () => pop.destroy(),
+      duration: 360,
+      ease: 'Sine.in',
+      onComplete: () => {
+        if (this.scorePopup === popup) {
+          popup.destroy();
+          this.scorePopup = undefined;
+          this.scorePopupPoints = 0;
+          this.scorePopupCombo = 0;
+        }
+      },
     });
   }
 

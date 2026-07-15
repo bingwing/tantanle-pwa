@@ -57,5 +57,9 @@ describe('shot abilities', () => {
     expect(source).toContain('hideAbilityButton');
     expect(source).toContain('activateShotAbility');
     expect(source).toContain('resolveShotAbility(this.currentShotType)');
+    expect(source).toContain('abilityButtonLabel');
+    expect(source).toContain('abilityProgress');
+    expect(source).toContain("classic: '冲刺'");
+    expect(source).toContain("split: '分裂'");
   });
 });

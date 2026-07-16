@@ -92,7 +92,7 @@ export class LevelScene extends Phaser.Scene {
       const y = 235 + Math.floor(index / 3) * 180;
       const progress = this.save.levels[level.id];
       const unlocked = progress?.unlocked ?? level.id === 1;
-      const button = addButton(this, x, y, 190, 100, unlocked ? `${level.id}` : '锁', () => {
+      const button = addButton(this, x, y, 190, 100, unlocked ? `${level.id}\n${level.name}` : '锁', () => {
         if (unlocked) {
           this.scene.start('GameScene', { levelId: level.id });
         }

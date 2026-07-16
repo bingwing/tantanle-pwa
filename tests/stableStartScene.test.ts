@@ -6,7 +6,7 @@ describe('stable level startup', () => {
     const gameSource = readFileSync(new URL('../src/scenes/GameScene.ts', import.meta.url), 'utf8');
 
     expect(gameSource).toContain('private worldReady = false;');
-    expect(gameSource).toContain("this.feedback?.setText('糖果塔准备中');");
+    expect(gameSource).toContain("this.showFeedback('糖果塔准备中');");
     expect(gameSource).toContain('private settleWorldAndSpawnBall(): void');
     expect(gameSource).toContain('isBodyMotionSettled(sprite.body.speed, sprite.body.angularSpeed)');
     expect(gameSource).toContain('sampledMs += WORLD_SETTLE.checkMs;');

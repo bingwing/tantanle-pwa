@@ -26,6 +26,7 @@ export function addButton(
       fontSize: '30px',
       color: '#2e4057',
       fontStyle: '900',
+      align: 'center',
     })
     .setOrigin(0.5);
 

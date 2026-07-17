@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { CandyAudio } from '../game/audio';
 import { APP_HEIGHT, APP_WIDTH, SLINGSHOT } from '../game/config';
+import { resolveStarProgress } from '../game/levelProgress';
 import { LEVELS } from '../game/levels';
 import {
   SUGAR_RUSH_COMBO_TARGET,
@@ -130,11 +131,20 @@ const SUGAR_RUSH_METER = {
   gap: 7,
 } as const;
 
+const STAR_PROGRESS_METER = {
+  x: 34,
+  y: 202,
+  width: 360,
+  height: 24,
+} as const;
+
 export class GameScene extends Phaser.Scene {
   private level!: LevelDefinition;
   private shotsLeft = 0;
+  private shotsUsed = 0;
   private score = 0;
   private targetsCleared = 0;
+  private earnedStars = 0;
   private blocksBroken = 0;
   private activeBall?: MatterImage;
   private activeBalls = new Set<MatterImage>();
@@ -147,6 +157,9 @@ export class GameScene extends Phaser.Scene {
   private currentTrajectoryPreview: Array<{ x: number; y: number; radius: number }> = [];
   private hud?: Phaser.GameObjects.Text;
   private ballTypeText?: Phaser.GameObjects.Text;
+  private objectiveText?: Phaser.GameObjects.Text;
+  private starProgressGraphics?: Phaser.GameObjects.Graphics;
+  private starProgressStars: Phaser.GameObjects.Text[] = [];
   private feedback?: Phaser.GameObjects.Text;
   private sugarRushMeter?: Phaser.GameObjects.Graphics;
   private sugarRushText?: Phaser.GameObjects.Text;
@@ -188,8 +201,10 @@ export class GameScene extends Phaser.Scene {
   init(data: { levelId: number }): void {
     this.level = LEVELS.find((candidate) => candidate.id === data.levelId) ?? LEVELS[0];
     this.shotsLeft = this.level.shots;
+    this.shotsUsed = 0;
     this.score = 0;
     this.targetsCleared = 0;
+    this.earnedStars = 0;
     this.blocksBroken = 0;
     this.targets.clear();
     this.blocks.clear();
@@ -310,6 +325,23 @@ export class GameScene extends Phaser.Scene {
         strokeThickness: 4,
       })
       .setDepth(30);
+    this.objectiveText = this.add.text(34, 142, '', {
+      fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif',
+      fontSize: '21px',
+      color: '#2e4057',
+      fontStyle: '900',
+      stroke: '#ffffff',
+      strokeThickness: 4,
+    }).setDepth(31);
+    this.starProgressGraphics = this.add.graphics().setDepth(30);
+    this.starProgressStars = [0, 1, 2].map(() => this.add.text(0, 0, '☆', {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '30px',
+      color: '#ffcf4d',
+      fontStyle: '900',
+      stroke: '#2e4057',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(32));
     this.sugarRushMeter = this.add.graphics().setDepth(30);
     this.sugarRushText = this.add
       .text(SUGAR_RUSH_METER.x + SUGAR_RUSH_METER.width / 2, SUGAR_RUSH_METER.y - 21, '', {
@@ -342,6 +374,52 @@ export class GameScene extends Phaser.Scene {
     this.ballTypeText?.setText(`当前：${SHOT_LABEL[this.currentShotType]}`);
     this.ballTypeText?.setColor(Phaser.Display.Color.IntegerToColor(SHOT_TINT[this.currentShotType]).rgba);
     this.drawSugarRushMeter();
+    this.drawStarProgress();
+  }
+
+  private drawStarProgress(): void {
+    if (!this.starProgressGraphics) {
+      return;
+    }
+
+    const progress = resolveStarProgress(this.level.starScores, this.score, this.earnedStars);
+    const { x, y, width, height } = STAR_PROGRESS_METER;
+    const fillWidth = width * progress.ratio;
+    this.objectiveText?.setText(`目标 ${this.targetsCleared}/${this.level.targets.length}  ·  三星冲刺`);
+    this.starProgressGraphics.clear();
+    this.starProgressGraphics.fillStyle(0xffffff, 0.94);
+    this.starProgressGraphics.fillRoundedRect(x, y, width, height, 7);
+    if (fillWidth > 0) {
+      this.starProgressGraphics.fillStyle(0xffcf4d, 1);
+      this.starProgressGraphics.fillRoundedRect(x, y, fillWidth, height, 7);
+      this.starProgressGraphics.lineStyle(3, 0xffffff, 0.76);
+      for (let stripe = 10; stripe < fillWidth; stripe += 14) {
+        this.starProgressGraphics.lineBetween(x + stripe - 6, y + height - 4, x + stripe + 4, y + 4);
+      }
+    }
+    this.starProgressGraphics.lineStyle(4, 0x2e4057, 0.82);
+    this.starProgressGraphics.strokeRoundedRect(x, y, width, height, 7);
+
+    this.level.starScores.forEach((threshold, index) => {
+      const markerX = x + (threshold / this.level.starScores[2]) * width;
+      this.starProgressStars[index]?.setPosition(markerX, y + height / 2).setText(index < progress.stars ? '★' : '☆');
+    });
+
+    if (progress.newlyEarned > 0 && progress.milestoneText) {
+      const previousStars = this.earnedStars;
+      this.earnedStars = progress.stars;
+      this.showFeedback(progress.milestoneText, 2, 700);
+      this.audio?.play('combo');
+      for (let index = previousStars; index < progress.stars; index += 1) {
+        const star = this.starProgressStars[index];
+        if (star) {
+          this.tweens.add({ targets: star, scale: 1.45, duration: 140, yoyo: true, ease: 'Back.out' });
+        }
+      }
+      return;
+    }
+
+    this.earnedStars = Math.max(this.earnedStars, progress.stars);
   }
 
   private showFeedback(message: string, priority = 0, protectMs = 260): void {
@@ -930,6 +1008,7 @@ export class GameScene extends Phaser.Scene {
     this.shotInFlight = true;
     this.shotLifecycle = createShotLifecycleState();
     this.shotsLeft -= 1;
+    this.shotsUsed += 1;
     this.shotIndex += 1;
     ball.setStatic(false);
     ball.setVelocity(velocity.x, velocity.y);
@@ -1564,16 +1643,26 @@ export class GameScene extends Phaser.Scene {
   private finish(won: boolean): void {
     this.hideAbilityButton();
     const stars = won ? Math.max(1, calculateStars(this.level, this.score)) : 0;
+    const save = this.registry.get('save') as GameSave;
+    const previousBestScore = save.levels[this.level.id]?.bestScore ?? 0;
+    const isNewBest = won && this.score > previousBestScore;
+    let bestScore = previousBestScore;
     if (won) {
-      const save = updateLevelProgress(this.registry.get('save') as GameSave, LEVELS, this.level.id, this.score, stars);
-      this.registry.set('save', save);
-      writeSave(window.localStorage, save);
+      const updatedSave = updateLevelProgress(save, LEVELS, this.level.id, this.score, stars);
+      bestScore = updatedSave.levels[this.level.id]?.bestScore ?? this.score;
+      this.registry.set('save', updatedSave);
+      writeSave(window.localStorage, updatedSave);
     }
     this.scene.start('ResultScene', {
       levelId: this.level.id,
       won,
       score: this.score,
       stars,
+      shotsUsed: this.shotsUsed,
+      targetsCleared: this.targetsCleared,
+      totalTargets: this.level.targets.length,
+      isNewBest,
+      bestScore,
     });
   }
 }

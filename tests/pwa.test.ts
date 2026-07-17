@@ -19,6 +19,7 @@ describe('pwa and github pages setup', () => {
     const workflow = readFileSync(new URL('../.github/workflows/deploy-pages.yml', import.meta.url), 'utf8');
 
     expect(workflow).toContain('actions/deploy-pages');
+    expect(workflow).toContain('enablement: true');
     expect(workflow).toContain('npm run build');
   });
 });
